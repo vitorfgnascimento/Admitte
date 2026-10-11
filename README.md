@@ -176,7 +176,7 @@ Recursos incluídos depois das Etapas 1 a 4 (cobertos pelas migrações em `supa
 - Mover a trilha de auditoria para uma tabela no Supabase, para que persista em ambientes serverless (pré-requisito do deploy). Os PDFs já têm persistência via `ARMAZENAMENTO_DRIVER=supabase`.
 - Deploy do MVP em nuvem (a configuração atual já inclui `vercel.json`; Render/Railway continuam possíveis via a variável `PORT`).
 - Gestão de credenciais reais do Google OAuth para o ambiente de produção.
-- URLs amigáveis sem `.html` (ver `ROADMAP.md`).
+- URLs amigáveis sem `.html` (planejado no roadmap, mantido fora do repositório).
 
 ## Como Executar o Projeto Localmente
 

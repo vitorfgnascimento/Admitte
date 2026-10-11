@@ -162,3 +162,6 @@ uploads/*
 # (dados pessoais - LGPD, nao versionar)
 relatorio_geral_admissoes.xlsx
 .vercel
+
+# Roadmap pessoal do dono do projeto (fica na nuvem, nao versionar)
+ROADMAP.md
