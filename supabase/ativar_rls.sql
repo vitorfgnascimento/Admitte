@@ -19,8 +19,9 @@ alter table configuracoes  enable row level security;
 alter table recuperacoes_senha enable row level security;
 alter table auditoria      enable row level security;
 alter table solicitacoes_titular enable row level security;
+alter table limites_taxa enable row level security;
 
 -- Reforço: remove também as permissões diretas dos papéis públicos da API.
 revoke all on table usuarios, sessoes, candidatos, mensagens_chat, etiquetas, configuracoes,
-  recuperacoes_senha, auditoria, solicitacoes_titular
+  recuperacoes_senha, auditoria, solicitacoes_titular, limites_taxa
   from anon, authenticated;

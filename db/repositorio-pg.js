@@ -169,6 +169,25 @@ function criar(poolDoCliente) {
     buscarRecuperacaoPorHash: (tokenHash) => um('SELECT * FROM recuperacoes_senha WHERE token_hash = $1', [tokenHash]),
     atualizarRecuperacao: (id, campos) => atualizar('recuperacoes_senha', campos, { id }),
 
+    // limites de taxa compartilhados entre instancias (chave = SHA-256)
+    incrementarLimite: async (chave, agora, janelaMs) => {
+      const r = await um(
+        'INSERT INTO limites_taxa (chave, contagem, expira_em) VALUES ($1, 1, $3) ' +
+        'ON CONFLICT (chave) DO UPDATE SET ' +
+        'contagem = CASE WHEN limites_taxa.expira_em <= $2 THEN 1 ELSE limites_taxa.contagem + 1 END, ' +
+        'expira_em = CASE WHEN limites_taxa.expira_em <= $2 THEN $3 ELSE limites_taxa.expira_em END ' +
+        'RETURNING contagem, expira_em',
+        [chave, agora, agora + janelaMs]
+      );
+      return { contagem: Number(r.contagem), expiraEm: Number(r.expira_em) };
+    },
+    lerLimite: async (chave, agora) => {
+      const r = await um('SELECT contagem, expira_em FROM limites_taxa WHERE chave = $1', [chave]);
+      return r && Number(r.expira_em) > agora ? Number(r.contagem) : 0;
+    },
+    zerarLimite: (chave) => excluir('limites_taxa', 'chave', chave),
+    limparLimites: (agora) => consultar('DELETE FROM limites_taxa WHERE expira_em <= $1', [agora]),
+
     // pedidos do titular (LGPD)
     listarSolicitacoes: () => consultar('SELECT * FROM solicitacoes_titular'),
     listarSolicitacoesDoUsuario: (usuarioId, status) => (status

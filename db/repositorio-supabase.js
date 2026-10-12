@@ -140,6 +140,27 @@ async function atualizarRecuperacao(id, campos) {
   resultado(await supabase.from('recuperacoes_senha').update(campos).eq('id', id));
 }
 
+// --------------------------------- limites de taxa (compartilhados entre instancias)
+// A chave e o SHA-256 do identificador (o banco nao guarda IP nem e-mail). O
+// incremento e atomico no banco, pela funcao incrementar_limite
+// (supabase/migracao_limites.sql).
+async function incrementarLimite(chave, agora, janelaMs) {
+  const linhas = resultado(await supabase.rpc('incrementar_limite', { p_chave: chave, p_agora: agora, p_fim: agora + janelaMs }));
+  const r = Array.isArray(linhas) ? linhas[0] : linhas;
+  if (!r) throw new Error('incrementar_limite nao retornou linha');
+  return { contagem: Number(r.contagem), expiraEm: Number(r.expira_em) };
+}
+async function lerLimite(chave, agora) {
+  const r = resultado(await supabase.from('limites_taxa').select('contagem, expira_em').eq('chave', chave).maybeSingle());
+  return r && Number(r.expira_em) > agora ? Number(r.contagem) : 0;
+}
+async function zerarLimite(chave) {
+  resultado(await supabase.from('limites_taxa').delete().eq('chave', chave));
+}
+async function limparLimites(agora) {
+  resultado(await supabase.from('limites_taxa').delete().lte('expira_em', agora));
+}
+
 // ------------------------------------------------- pedidos do titular (LGPD)
 async function listarSolicitacoes() {
   return lista(await supabase.from('solicitacoes_titular').select('*'));
@@ -169,5 +190,6 @@ module.exports = {
   listarEtiquetas, gravarEtiquetas, excluirEtiqueta,
   buscarConfiguracoes, gravarConfiguracoes,
   invalidarRecuperacoesDoUsuario, inserirRecuperacao, buscarRecuperacaoPorHash, atualizarRecuperacao,
+  incrementarLimite, lerLimite, zerarLimite, limparLimites,
   listarSolicitacoes, listarSolicitacoesDoUsuario, buscarSolicitacao, inserirSolicitacao, atualizarSolicitacao
 };

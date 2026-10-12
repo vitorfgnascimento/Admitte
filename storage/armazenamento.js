@@ -8,7 +8,7 @@
 //
 // Drivers, escolhidos por ARMAZENAMENTO_DRIVER:
 //   local    (padrão) disco do servidor (pasta uploads/). Bom para servidor
-//                     próprio com disco persistente; NÃO persiste na Vercel.
+//                     próprio com disco persistente; NÃO persiste em hospedagem serverless.
 //   supabase          bucket privado do Supabase Storage (ver README).
 //
 // Trocar de plataforma = escrever outro driver com a mesma interface (ex.: S3).

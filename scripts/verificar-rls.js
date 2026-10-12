@@ -10,7 +10,7 @@ require('dotenv').config();
 const TABELAS = {
   usuarios: 'id', sessoes: 'token', candidatos: 'id',
   mensagens_chat: 'id', etiquetas: 'id', configuracoes: 'id',
-  recuperacoes_senha: 'id', auditoria: 'id', solicitacoes_titular: 'id'
+  recuperacoes_senha: 'id', auditoria: 'id', solicitacoes_titular: 'id', limites_taxa: 'chave'
 };
 
 async function main() {

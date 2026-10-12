@@ -199,7 +199,7 @@ Recursos incluídos depois das Etapas 1 a 4 (cobertos pelas migrações em `supa
 ## Próximas fases do roteiro de desenvolvimento
 
 - Os PDFs (`ARMAZENAMENTO_DRIVER=supabase`) e a trilha de auditoria (tabela `auditoria`) já persistem em ambientes serverless; falta aplicar as migrações no banco de produção.
-- Deploy do MVP em nuvem (a configuração atual já inclui `vercel.json`; Render/Railway continuam possíveis via a variável `PORT`).
+- Deploy em nuvem: o `vercel.json` na raiz só serve à Vercel e é ignorado por Docker e Node; qualquer outra hospedagem serverless usa `SERVERLESS=1`, e servidores comuns usam `node index.js` (variável `PORT`). Toda a lógica de plataforma fica em `lib/plataforma.js`.
 - Gestão de credenciais reais do Google OAuth para o ambiente de produção.
 - URLs amigáveis sem `.html` (planejado no roadmap, mantido fora do repositório).
 
@@ -252,6 +252,7 @@ cp .env.example .env
    4c. `migracao_auditoria.sql` - trilha de auditoria imutável (tabela `auditoria`, com gatilho append-only)
    4d. `migracao_titular.sql` - direitos do titular (LGPD): tabela `solicitacoes_titular` e coluna `candidatos.anonimizado_em`
    4e. `migracao_mfa.sql` - verificação em duas etapas: colunas `mfa_*` em `usuarios`
+   4f. `migracao_limites.sql` - limites de tentativas compartilhados entre instâncias (tabela `limites_taxa` e função `incrementar_limite`)
    5. `ativar_rls.sql` - **liga o RLS** nas 9 tabelas, sem políticas: só o servidor (chave secret) acessa o banco. Aplique somente depois que o servidor já estiver rodando com `SUPABASE_SERVICE_KEY`.
 3. Para testes pessoais, use um projeto Supabase próprio, para não alterar dados compartilhados.
 
@@ -280,9 +281,12 @@ docker compose -f docker-compose.cliente.yml exec -T db pg_dump -U admitte admit
 ```
 Guarde também uma cópia do volume `dados` (documentos enviados) e do `.env.cliente`.
 
-**Atualizar a versão:** `git pull` e rode o mesmo `up -d --build`. Migrações novas são arquivos aditivos em `db/postgres/`.
+**Atualizar a versão:** `git pull` e rode o mesmo `up -d --build`. O arquivo `db/postgres/01-esquema.sql` é idempotente: em um banco já existente, aplique-o de novo para criar tabelas novas:
+```bash
+docker compose -f docker-compose.cliente.yml exec -T db psql -U admitte -d admitte < db/postgres/01-esquema.sql
+```
 
-**Limites conhecidos desta versão:** os PDFs usam disco local (um driver S3/MinIO é o item 5.6 do roadmap) e os limites de tentativas ficam em memória, então rode **uma instância** da aplicação (item 5.5). O driver é validado na bateria de testes (`npm run teste:postgres`) sobre um Postgres em memória; antes da primeira entrega a um cliente, rode a instalação completa em um Postgres real e confira o gatilho de auditoria (`UPDATE` em `auditoria` deve falhar).
+**Mais de uma instância:** sessões e limites de tentativas (login, cadastro, MFA...) ficam no banco, então réplicas da aplicação somam as mesmas tentativas e uma sessão vale em qualquer uma (validado com duas réplicas sobre o mesmo Postgres). `LIMITES_COMPARTILHADOS=0` volta ao contador em memória de cada processo. **Limite conhecido:** os PDFs usam disco local (volume `dados`), então, para mais de uma réplica, todas precisam montar o mesmo volume ou usar o driver S3/MinIO (item 5.6 do roadmap). O driver é validado na bateria de testes (`npm run teste:postgres`, Postgres em memória) e a instalação completa foi validada em Postgres 16 real com Docker (cadastro, ficha, upload, chat, exclusão LGPD, MFA, backup com `pg_dump`, persistência após reiniciar e gatilho de auditoria bloqueando `UPDATE`, `DELETE` e `TRUNCATE`). Repita essa conferência a cada entrega a um cliente novo.
 
 ### Login com o Google
 
@@ -319,7 +323,7 @@ node index.js
 
 ## Tecnologias
 
-Node.js, Express e Multer no backend (`bcryptjs` para senhas, `pdfkit` e `exceljs` para relatórios, `google-auth-library` para o login Google); HTML5, CSS3 e JavaScript puro (Vanilla JS) no frontend; Supabase (Postgres) para os dados e disco local para PDFs e auditoria; Git e GitHub para versionamento; Docker e Docker Compose para conteinerização; Vercel como alvo de deploy.
+Node.js, Express e Multer no backend (`bcryptjs` para senhas, `pdfkit` e `exceljs` para relatórios, `google-auth-library` para o login Google); HTML5, CSS3 e JavaScript puro (Vanilla JS) no frontend; Postgres para os dados (Supabase ou banco próprio do cliente) e disco local ou Supabase Storage para PDFs; Git e GitHub para versionamento; Docker e Docker Compose para conteinerização; deploy em servidor próprio (Docker) ou na nuvem (Vercel, opcional).
 
 ## Licença
 

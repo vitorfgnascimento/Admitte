@@ -4,16 +4,20 @@
 //   FALSO_PORTA=54330 node scripts/supabase-falso.js
 const http = require('http');
 
-const tabelas = { usuarios: [], sessoes: [], candidatos: [], mensagens_chat: [], etiquetas: [], configuracoes: [], recuperacoes_senha: [], auditoria: [], solicitacoes_titular: [] };
-const chavePrimaria = { usuarios: 'id', sessoes: 'token', candidatos: 'id', mensagens_chat: 'id', etiquetas: 'id', configuracoes: 'id', recuperacoes_senha: 'id', auditoria: 'id', solicitacoes_titular: 'id' };
+const tabelas = { usuarios: [], sessoes: [], candidatos: [], mensagens_chat: [], etiquetas: [], configuracoes: [], recuperacoes_senha: [], auditoria: [], solicitacoes_titular: [], limites_taxa: [] };
+const chavePrimaria = { usuarios: 'id', sessoes: 'token', candidatos: 'id', mensagens_chat: 'id', etiquetas: 'id', configuracoes: 'id', recuperacoes_senha: 'id', auditoria: 'id', solicitacoes_titular: 'id', limites_taxa: 'chave' };
 const objetos = new Map(); // "bucket/caminho" -> Buffer
 
 function filtrar(linhas, params) {
   let r = linhas;
   for (const [campo, valor] of params) {
-    const m = /^(eq|neq|gt)\.(.*)$/.exec(valor);
+    const m = /^(eq|neq|gt|gte|lt|lte)\.(.*)$/.exec(valor);
     if (!m) continue;
-    if (m[1] === 'gt') r = r.filter((x) => String(x[campo]) > m[2]);
+    const numero = (v) => (Number.isFinite(Number(v)) && String(v).trim() !== '' ? Number(v) : String(v));
+    if (m[1] === 'gt') r = r.filter((x) => numero(x[campo]) > numero(m[2]));
+    else if (m[1] === 'gte') r = r.filter((x) => numero(x[campo]) >= numero(m[2]));
+    else if (m[1] === 'lt') r = r.filter((x) => numero(x[campo]) < numero(m[2]));
+    else if (m[1] === 'lte') r = r.filter((x) => numero(x[campo]) <= numero(m[2]));
     else r = r.filter((x) => (m[1] === 'eq' ? String(x[campo]) === m[2] : String(x[campo]) !== m[2]));
   }
   return r;
@@ -55,6 +59,16 @@ const servidor = http.createServer((req, res) => {
       return json(200, []);
     }
     if (url.pathname === '/__objetos') return json(200, [...objetos.keys()]);
+
+    // ---- RPC: incrementar_limite (equivalente a funcao de migracao_limites.sql) ----
+    if (req.method === 'POST' && url.pathname === '/rest/v1/rpc/incrementar_limite') {
+      const { p_chave, p_agora, p_fim } = JSON.parse(bruto.toString() || '{}');
+      let linha = tabelas.limites_taxa.find((x) => x.chave === p_chave);
+      if (!linha) { linha = { chave: p_chave, contagem: 1, expira_em: p_fim }; tabelas.limites_taxa.push(linha); }
+      else if (Number(linha.expira_em) <= p_agora) { linha.contagem = 1; linha.expira_em = p_fim; }
+      else linha.contagem += 1;
+      return json(200, [{ contagem: linha.contagem, expira_em: linha.expira_em }]);
+    }
 
     // ---- PostgREST ----
     m = /^\/rest\/v1\/([a-z_]+)$/.exec(url.pathname);

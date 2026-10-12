@@ -71,7 +71,7 @@ async function iniciarAmbiente() {
     env: {
       ...process.env,
       ...extraPg(PORTA_PROD),
-      NODE_ENV: 'production', DIRETORIO_DADOS: pastaTemp, MFA_OBRIGATORIO: '1',
+      NODE_ENV: 'production', DIRETORIO_DADOS: pastaTemp, MFA_OBRIGATORIO: '1', LIMITE_CADASTROS_HORA: '1000', LIMITE_RECUPERACOES_IP_HORA: '1000',
       MARCA_NOME: 'Acme <b>RH', MARCA_LOGO_URL: 'https://cdn.exemplo.test/logo.svg', MARCA_COR: '#1E40AF',
       SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '',
       ARMAZENAMENTO_DRIVER: 'local', SENHA_RH_TESTE: '', MASTER_EMAIL: '', MASTER_SENHA: ''
@@ -127,6 +127,17 @@ async function suite(BASE, urlFalso) {
   const exportadas = (/module\.exports = \{([\s\S]*)\};/.exec(fonteRepo) || [, ''])[1].split(',').map((s) => s.replace(/driver: 'supabase'|\s/g, '')).filter(Boolean);
   const usadas = [...new Set([...fontePrincipal.matchAll(/\brepo\.([a-zA-Z]+)\(/g)].map((m) => m[1]))];
   t('5.1', 'Portabilidade', 'Toda função usada via repo.* existe no repositório', usadas.every((u) => exportadas.includes(u)), usadas.filter((u) => !exportadas.includes(u)).join(','));
+  // 5.4: nenhuma particularidade de hospedagem fora de lib/plataforma.js.
+  const plataformaLib = require('../lib/plataforma');
+  const fontesComVercel = ['index.js', 'db/repositorio.js', 'db/repositorio-pg.js', 'db/repositorio-supabase.js', 'storage/armazenamento.js', 'lib/email.js', 'lib/marca.js', 'lib/mfa.js']
+    .filter((f) => /process\.env\.VERCEL/.test(fs.readFileSync(path.join(RAIZ, f), 'utf8')));
+  t('5.4', 'Portabilidade', 'process.env.VERCEL só é lido em lib/plataforma.js', fontesComVercel.length === 0, fontesComVercel.join(','));
+  const pc = (env) => plataformaLib.detectar(env, '/projeto');
+  t('5.4', 'Portabilidade', 'Servidor comum: grava na pasta do projeto, sem proxy por padrão', pc({}).diretorioDados === '/projeto' && !pc({}).serverless && !pc({}).confiarNoProxy, JSON.stringify(pc({})));
+  t('5.4', 'Portabilidade', 'Vercel é detectada: serverless, proxy confiável e diretório temporário', pc({ VERCEL: '1' }).nome === 'vercel' && pc({ VERCEL: '1' }).serverless && pc({ VERCEL: '1' }).confiarNoProxy && pc({ VERCEL: '1' }).diretorioDados !== '/projeto', JSON.stringify(pc({ VERCEL: '1' })));
+  t('5.4', 'Portabilidade', 'SERVERLESS=1 vale para qualquer outra hospedagem', pc({ SERVERLESS: '1' }).serverless && pc({ SERVERLESS: '1' }).nome === 'serverless', '');
+  t('5.4', 'Portabilidade', 'DIRETORIO_DADOS e TRUST_PROXY=1 sempre prevalecem', pc({ VERCEL: '1', DIRETORIO_DADOS: '/dados' }).diretorioDados === '/dados' && pc({ TRUST_PROXY: '1' }).confiarNoProxy, '');
+
   // 5.3: o driver Postgres tem exatamente a mesma interface do driver Supabase.
   const funcoesPg = Object.keys(require('../db/repositorio-pg')).filter((k) => !['driver', 'criar'].includes(k));
   t('5.3', 'Portabilidade', 'Driver Postgres e driver Supabase expõem as mesmas funções', funcoesPg.length === exportadas.length && exportadas.every((f) => funcoesPg.includes(f)), `pg=${funcoesPg.length} supabase=${exportadas.length}`);
@@ -517,7 +528,7 @@ async function suite(BASE, urlFalso) {
   }
 }
 
-async function suiteProducao(BASE) {
+async function suiteProducao(BASE, BASE_APP) {
   const J = { 'Content-Type': 'application/json' };
   const sufixo = Date.now().toString(36);
   const t404 = await fetch(BASE + '/testes.html');
@@ -539,7 +550,17 @@ async function suiteProducao(BASE) {
   t('5.2', 'Produção', 'Cor da marca é injetada como variável de tema', htmlMarca.includes('<style id="marca-cores">:root { --verde: #1E40AF'), '');
   const marcaProd = await (await fetch(BASE + '/api/marca')).json();
   t('5.2', 'Produção', '/api/marca reflete a configuração do ambiente', marcaProd.nome === 'Acme <b>RH' && marcaProd.logoUrl === 'https://cdn.exemplo.test/logo.svg', JSON.stringify(marcaProd));
-  // MFA_OBRIGATORIO=1: a equipe sem MFA entra, mas só alcança a página de segurança
+  // 5.5 Limites compartilhados: falhas em UMA instancia contam na OUTRA (mesmo banco).
+  if (BASE_APP) {
+    const alvo = `limite${sufixo}@exemplo.test`;
+    const falha = (b) => fetch(b + '/api/auth/login', { method: 'POST', headers: J, body: JSON.stringify({ email: alvo, senha: 'errada-' + Math.random() }) }).then((r) => r.status);
+    const parte1 = [await falha(BASE_APP), await falha(BASE_APP), await falha(BASE_APP)];
+    const parte2 = [await falha(BASE), await falha(BASE)];
+    const sexta = await falha(BASE);
+    const naOutra = await falha(BASE_APP);
+    t('5.5', 'Limites compartilhados', 'Falhas de login somadas entre duas instâncias: a 6ª é bloqueada (429)', [...parte1, ...parte2].every((s) => s === 401) && sexta === 429, [...parte1, ...parte2, sexta].join(','));
+    t('5.5', 'Limites compartilhados', 'O bloqueio vale também na outra instância (429)', naOutra === 429, `HTTP ${naOutra}`);
+  }  // MFA_OBRIGATORIO=1: a equipe sem MFA entra, mas só alcança a página de segurança
   const rhProd = await fetch(BASE + '/api/auth/login', { method: 'POST', headers: J, body: JSON.stringify({ email: 'rh@onboarding.local', senha: 'onboarding123' }) });
   const rhProdJson = await rhProd.json();
   t('3.4', 'Produção', 'Com MFA obrigatório, o login do RH sem MFA sinaliza a configuração obrigatória', rhProd.status === 200 && rhProdJson.mfaConfiguracaoObrigatoria === true, `HTTP ${rhProd.status}`);
@@ -559,7 +580,7 @@ async function main() {
     // Com o driver Postgres (pg-mem) não há Supabase falso: os testes que
     // inspecionam as linhas do banco pelo PostgREST são pulados.
     await suite(base, process.env.TESTE_BASE || POSTGRES ? null : `http://127.0.0.1:${PORTA_FALSO}`);
-    if (BASE_PROD) await suiteProducao(BASE_PROD);
+    if (BASE_PROD) await suiteProducao(BASE_PROD, !POSTGRES && !process.env.TESTE_BASE ? base : null);
   } catch (erro) {
     console.error('ERRO ao executar a bateria:', erro.message);
     encerrarAmbiente();

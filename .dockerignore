@@ -11,3 +11,5 @@ ROADMAP.md
 uploads
 *.json.bak
 docker-compose*.yml
+vercel.json
+.vercel

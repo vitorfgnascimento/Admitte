@@ -9,7 +9,7 @@
     "verificar:rls": "node scripts/verificar-rls.js",
     "teste:seguranca": "node scripts/teste-seguranca.js",
     "teste:postgres": "node scripts/teste-postgres.js",
-    "build": "echo \"Nenhum build necessario - aplicacao servida diretamente pelo Express (local) ou pela funcao serverless da Vercel.\""
+    "build": "echo \"Nenhum build necessario - aplicacao servida diretamente pelo Express (servidor, Docker ou funcao serverless).\""
   },
   "repository": {
     "type": "git",

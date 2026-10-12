@@ -142,3 +142,11 @@ create table if not exists solicitacoes_titular (
 );
 create index if not exists idx_solicitacoes_status on solicitacoes_titular(status);
 create index if not exists idx_solicitacoes_usuario on solicitacoes_titular(usuario_id);
+
+-- Limites de taxa compartilhados entre instancias (chave = SHA-256 do IP/e-mail/id).
+create table if not exists limites_taxa (
+  chave text primary key,
+  contagem integer not null,
+  expira_em bigint not null
+);
+create index if not exists idx_limites_expira on limites_taxa(expira_em);

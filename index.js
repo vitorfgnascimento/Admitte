@@ -1,6 +1,6 @@
 // Carrega variáveis de ambiente de um .env local (desenvolvimento) antes de
-// qualquer outro módulo ser inicializado - na Vercel isso é um no-op, pois a
-// plataforma já injeta as variáveis de ambiente nativamente.
+// qualquer outro módulo ser inicializado - em nuvem e em contêiner isso é um
+// no-op, pois a plataforma já injeta as variáveis de ambiente nativamente.
 require('dotenv').config();
 
 const express = require('express');
@@ -17,13 +17,14 @@ const { enviarEmail } = require('./lib/email');
 const mfa = require('./lib/mfa');
 const marca = require('./lib/marca');
 const QRCode = require('qrcode');
+const plataforma = require('./lib/plataforma');
 
 const app = express();
 
-// Atrás de proxy reverso (Vercel, Render, Railway...) o IP real do cliente vem
-// em X-Forwarded-For; sem isto req.ip seria o do proxy - o que quebraria o
-// limite de tentativas de login e o IP gravado na trilha de auditoria.
-if (process.env.VERCEL || process.env.TRUST_PROXY === '1') {
+// Atrás de proxy reverso (nuvem, Nginx, Caddy...) o IP real do cliente vem em
+// X-Forwarded-For; sem isto req.ip seria o do proxy - o que quebraria o limite
+// de tentativas de login e o IP gravado na trilha de auditoria.
+if (plataforma.confiarNoProxy) {
   app.set('trust proxy', 1);
 }
 
@@ -127,18 +128,13 @@ app.use(servirComMarca);
 
 app.use(express.static(DIRETORIO_PUBLICO));
 
-// Diretório gravável dos arquivos de dados (JSON, PDFs, planilha Mestre).
-// Na Vercel (serverless) o diretório do projeto é somente leitura - só /tmp
-// aceita gravação - então lá os arquivos são redirecionados para /tmp.
-// AVISO IMPORTANTE: /tmp é efêmero (apagado a cada cold start/nova
-// instância, e não é compartilhado entre instâncias concorrentes). Isso
-// evita que a aplicação quebre com erro de disco somente-leitura em
-// produção na Vercel, mas NÃO resolve persistência de dados - candidatos,
-// usuários e sessões cadastrados em produção podem ser perdidos a qualquer
-// momento. Para persistência real na Vercel, é necessário migrar para um
-// banco de dados gerenciado (Vercel Postgres/KV, Supabase etc.) - fora do
-// escopo desta adaptação, que só garante compatibilidade estrutural.
-const DIRETORIO_DADOS = process.env.DIRETORIO_DADOS || (process.env.VERCEL ? '/tmp' : __dirname);
+// Diretório gravável dos arquivos locais (PDFs com ARMAZENAMENTO_DRIVER=local,
+// planilha Mestre, reserva da auditoria). Vem de lib/plataforma.js: a pasta do
+// projeto (ou DIRETORIO_DADOS, ex.: um volume Docker); em hospedagem serverless
+// o disco do projeto é somente leitura e usa-se o diretório temporário, que é
+// EFÊMERO - lá os dados precisam estar no banco e os PDFs em armazenamento
+// externo (ARMAZENAMENTO_DRIVER).
+const DIRETORIO_DADOS = plataforma.diretorioDados;
 
 // Caminho absoluto do arquivo de persistência local (banco de dados simples em JSON)
 const ARQUIVO_CANDIDATOS = path.join(DIRETORIO_DADOS, 'candidatos.json');
@@ -999,31 +995,26 @@ const upload = multer({
 
 // ---------------------------------------------------------------------------
 // LIMITES DE TAXA (anti spam e abuso de custo)
-// Contadores em memória, por processo: protegem o servidor local e cada
-// instância em nuvem; em serverless (várias instâncias) o limite vale por
-// instância. Valores ajustáveis por variável de ambiente (ver .env.example).
+// Contadores compartilhados entre instâncias (banco, lib/limites.js); sem o
+// banco, cada processo conta sozinho. Valores ajustáveis por variável de
+// ambiente (ver .env.example).
 // ---------------------------------------------------------------------------
 function limiteDoAmbiente(nome, padrao) {
   const valor = Number(process.env[nome]);
   return Number.isFinite(valor) && valor > 0 ? valor : padrao;
 }
 
-function criarLimitador({ janelaMs, max, chave, mensagem }) {
-  const registros = new Map();
-  return (req, res, next) => {
-    const agora = Date.now();
-    const k = chave(req);
-    let registro = registros.get(k);
-    if (!registro || registro.fim <= agora) {
-      registro = { n: 0, fim: agora + janelaMs };
-      registros.set(k, registro);
-    }
-    registro.n += 1;
-    if (registros.size > 5000) {
-      for (const [c, v] of registros) if (v.fim <= agora) registros.delete(c);
-    }
-    if (registro.n > max) {
-      res.set('Retry-After', String(Math.max(1, Math.ceil((registro.fim - agora) / 1000))));
+// Os contadores ficam no banco (lib/limites.js), compartilhados entre as
+// instancias; sem banco disponivel, cada processo conta sozinho.
+const contadores = require('./lib/limites').criar({ repo, compartilhado: process.env.LIMITES_COMPARTILHADOS !== '0' });
+
+// `nome` separa os contadores de cada limitador (a chave compartilhada e
+// `lim|nome|chave`) e precisa ser estavel entre versoes.
+function criarLimitador({ nome, janelaMs, max, chave, mensagem }) {
+  return async (req, res, next) => {
+    const { contagem, fim } = await contadores.incrementar(`lim|${nome}|${chave(req)}`, janelaMs);
+    if (contagem > max) {
+      res.set('Retry-After', String(Math.max(1, Math.ceil((fim - Date.now()) / 1000))));
       return res.status(429).json({ erro: mensagem });
     }
     return next();
@@ -1034,23 +1025,23 @@ const HORA_MS = 60 * 60 * 1000;
 const porIp = (req) => `ip|${req.ip}`;
 const porUsuarioOuIp = (req) => (req.usuario ? `u|${req.usuario.id}` : `ip|${req.ip}`);
 
-const limiteCadastros = criarLimitador({
+const limiteCadastros = criarLimitador({ nome: 'limiteCadastros',
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_CADASTROS_HORA', 20), chave: porIp,
   mensagem: 'Muitos cadastros a partir deste endereço. Tente novamente mais tarde.'
 });
-const limiteAtivacoes = criarLimitador({
+const limiteAtivacoes = criarLimitador({ nome: 'limiteAtivacoes',
   janelaMs: 15 * 60 * 1000, max: limiteDoAmbiente('LIMITE_ATIVACOES_15MIN', 30), chave: porIp,
   mensagem: 'Muitas tentativas de ativação. Aguarde alguns minutos.'
 });
-const limiteFichas = criarLimitador({
+const limiteFichas = criarLimitador({ nome: 'limiteFichas',
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_FICHAS_HORA', 30), chave: porUsuarioOuIp,
   mensagem: 'Limite de fichas por hora atingido. Tente novamente mais tarde.'
 });
-const limiteUploads = criarLimitador({
+const limiteUploads = criarLimitador({ nome: 'limiteUploads',
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_UPLOADS_HORA', 120), chave: porUsuarioOuIp,
   mensagem: 'Limite de envios de documentos por hora atingido. Tente novamente mais tarde.'
 });
-const limiteMensagens = criarLimitador({
+const limiteMensagens = criarLimitador({ nome: 'limiteMensagens',
   janelaMs: 10 * 60 * 1000, max: limiteDoAmbiente('LIMITE_MENSAGENS_10MIN', 60), chave: porUsuarioOuIp,
   mensagem: 'Muitas mensagens em pouco tempo. Aguarde um instante.'
 });
@@ -1203,32 +1194,18 @@ app.post('/api/auth/ativar', limiteAtivacoes, async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // LIMITE DE TENTATIVAS DE LOGIN (anti força bruta)
-// Contador em memória, por processo: protege o servidor local e cada instância
-// em nuvem, mas em serverless (várias instâncias) o limite vale por instância.
+// Contadores compartilhados entre instâncias (lib/limites.js); sem banco,
+// cada processo conta sozinho.
 // Duas chaves: IP + e-mail (5 falhas) e IP sozinho (30 falhas) em 15 minutos.
 // Chaveado também pelo IP, um terceiro não bloqueia a conta da vítima.
 // ---------------------------------------------------------------------------
 const JANELA_LOGIN_MS = 15 * 60 * 1000;
 const MAX_FALHAS_LOGIN_POR_CONTA = 5;
 const MAX_FALHAS_LOGIN_POR_IP = 30;
-const falhasLogin = new Map(); // chave -> { quantidade, expiraEm }
-
-function falhasAtuais(chave) {
-  const registro = falhasLogin.get(chave);
-  if (!registro) return 0;
-  if (registro.expiraEm <= Date.now()) { falhasLogin.delete(chave); return 0; }
-  return registro.quantidade;
-}
-
-function registrarFalhaLogin(chave) {
-  if (falhasLogin.size > 5000) {
-    const agora = Date.now();
-    for (const [k, v] of falhasLogin) if (v.expiraEm <= agora) falhasLogin.delete(k);
-  }
-  const registro = falhasLogin.get(chave);
-  if (registro && registro.expiraEm > Date.now()) registro.quantidade += 1;
-  else falhasLogin.set(chave, { quantidade: 1, expiraEm: Date.now() + JANELA_LOGIN_MS });
-}
+// Falhas por chave (login e MFA), na janela de JANELA_LOGIN_MS.
+const falhasAtuais = (chave) => contadores.contagem('falha|' + chave);
+const registrarFalhaLogin = (chave) => contadores.incrementar('falha|' + chave, JANELA_LOGIN_MS);
+const limparFalhas = (chave) => contadores.zerar('falha|' + chave);
 
 // Hash descartável: quando o e-mail não existe, o bcrypt roda mesmo assim, para
 // que o tempo de resposta não revele quais e-mails têm conta.
@@ -1263,7 +1240,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   const chaveConta = `${req.ip}|${emailAparado}`;
   const chaveIp = `ip|${req.ip}`;
-  if (falhasAtuais(chaveConta) >= MAX_FALHAS_LOGIN_POR_CONTA || falhasAtuais(chaveIp) >= MAX_FALHAS_LOGIN_POR_IP) {
+  if ((await falhasAtuais(chaveConta)) >= MAX_FALHAS_LOGIN_POR_CONTA || (await falhasAtuais(chaveIp)) >= MAX_FALHAS_LOGIN_POR_IP) {
     res.set('Retry-After', String(Math.ceil(JANELA_LOGIN_MS / 1000)));
     return res.status(429).json({ erro: 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.' });
   }
@@ -1276,12 +1253,12 @@ app.post('/api/auth/login', async (req, res) => {
     : (bcrypt.compareSync(String(senha || ''), hashFalso()), false);
 
   if (!senhaOk) {
-    registrarFalhaLogin(chaveConta);
-    registrarFalhaLogin(chaveIp);
+    await registrarFalhaLogin(chaveConta);
+    await registrarFalhaLogin(chaveIp);
     return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
   }
 
-  falhasLogin.delete(chaveConta);
+  await limparFalhas(chaveConta);
 
   if (usuario.ativo === false) {
     return res.status(403).json({ erro: 'Conta ainda não ativada. Verifique o link de confirmação enviado no cadastro (ou o console do servidor, neste ambiente de testes).' });
@@ -3961,16 +3938,16 @@ async function enviarPedidoRecuperacao(req, usuario, pedido, finalidade) {
   return { emailEnviado: resultado.enviado, emailSimulado: resultado.simulado, ...teste };
 }
 
-const limiteRecuperacao = criarLimitador({
+const limiteRecuperacao = criarLimitador({ nome: 'limiteRecuperacao',
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_RECUPERACOES_HORA', 5),
   chave: (req) => `rec|${req.ip}|${String((req.body || {}).email || '').trim().toLowerCase()}`,
   mensagem: 'Muitos pedidos de recuperação de senha. Tente novamente mais tarde.'
 });
-const limiteRecuperacaoIp = criarLimitador({
+const limiteRecuperacaoIp = criarLimitador({ nome: 'limiteRecuperacaoIp',
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_RECUPERACOES_IP_HORA', 20), chave: porIp,
   mensagem: 'Muitos pedidos de recuperação de senha. Tente novamente mais tarde.'
 });
-const limiteRedefinicao = criarLimitador({
+const limiteRedefinicao = criarLimitador({ nome: 'limiteRedefinicao',
   janelaMs: 15 * 60 * 1000, max: limiteDoAmbiente('LIMITE_REDEFINICOES_15MIN', 15), chave: porIp,
   mensagem: 'Muitas tentativas. Aguarde alguns minutos.'
 });
@@ -4152,7 +4129,7 @@ async function montarExportacaoTitular(usuario) {
   };
 }
 
-const limiteTitular = criarLimitador({
+const limiteTitular = criarLimitador({ nome: 'limiteTitular',
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_TITULAR_HORA', 10), chave: porUsuarioOuIp,
   mensagem: 'Muitos pedidos em pouco tempo. Tente novamente mais tarde.'
 });
@@ -4274,7 +4251,7 @@ app.post('/api/admin/retencao', exigirAdmin, comTratamento(async (req, res) => {
   return res.status(200).json({ simulacao: false, dias, fichasAnonimizadas: elegiveis.length, contasExcluidas });
 }));
 
-const limiteGestaoContas = criarLimitador({
+const limiteGestaoContas = criarLimitador({ nome: 'limiteGestaoContas',
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_CONTAS_CRIADAS_HORA', 60), chave: porUsuarioOuIp,
   mensagem: 'Limite de contas criadas por hora atingido.'
 });
@@ -4372,7 +4349,7 @@ app.post('/api/admin/operadores/:id/reenviar-acesso', exigirAdmin, limiteGestaoC
 // existem como hash. Quem perdeu o aplicativo e os códigos é resetado pelo
 // admin (operadores) ou pelo master (administradores).
 // ---------------------------------------------------------------------------
-const limiteMfa = criarLimitador({
+const limiteMfa = criarLimitador({ nome: 'limiteMfa',
   janelaMs: 15 * 60 * 1000, max: limiteDoAmbiente('LIMITE_MFA_15MIN', 30), chave: porUsuarioOuIp,
   mensagem: 'Muitas tentativas de verificação. Aguarde alguns minutos.'
 });
@@ -4415,7 +4392,7 @@ app.post('/api/auth/mfa/verificar', limiteMfa, comTratamento(async (req, res) =>
   if (!usuarioId) return res.status(401).json({ erro: 'A verificação expirou. Entre novamente com e-mail e senha.' });
 
   const chave = `mfa|${usuarioId}`;
-  if (falhasAtuais(chave) >= MAX_FALHAS_MFA) {
+  if ((await falhasAtuais(chave)) >= MAX_FALHAS_MFA) {
     res.set('Retry-After', String(Math.ceil(JANELA_LOGIN_MS / 1000)));
     return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos e entre novamente.' });
   }
@@ -4426,11 +4403,11 @@ app.post('/api/auth/mfa/verificar', limiteMfa, comTratamento(async (req, res) =>
 
   const conferido = await conferirSegundoFator(usuario, codigo);
   if (!conferido.ok) {
-    registrarFalhaLogin(chave);
+    await registrarFalhaLogin(chave);
     await eventoMfa('mfa_falha', usuario, req);
     return res.status(401).json({ erro: 'Código inválido ou já utilizado.' });
   }
-  falhasLogin.delete(chave);
+  await limparFalhas(chave);
 
   const token = await criarSessao(usuario.id);
   await eventoMfa('login', usuario, req, { email: usuario.email, mfa: conferido.via });
@@ -4466,13 +4443,13 @@ app.post('/api/auth/mfa/ativar', autenticar, limiteMfa, comTratamento(async (req
   if (!u.mfaSegredo) return res.status(400).json({ erro: 'Inicie a configuração antes de confirmar o código.' });
 
   const chave = `mfa-ativar|${u.id}`;
-  if (falhasAtuais(chave) >= MAX_FALHAS_MFA) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos.' });
+  if ((await falhasAtuais(chave)) >= MAX_FALHAS_MFA) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos.' });
   const passo = mfa.verificarTotp(mfa.decifrar(u.mfaSegredo, materialMfa()), (req.body || {}).codigo, 0);
   if (passo === null) {
-    registrarFalhaLogin(chave);
+    await registrarFalhaLogin(chave);
     return res.status(400).json({ erro: 'Código inválido. Confira o horário do celular e tente com o código atual.' });
   }
-  falhasLogin.delete(chave);
+  await limparFalhas(chave);
 
   const codigos = mfa.gerarCodigosRecuperacao(10);
   await atualizarMfa(u.id, { mfa_ativo: true, mfa_ultimo_passo: passo, mfa_codigos: codigos.map(mfa.hashCodigo) });
@@ -4489,15 +4466,15 @@ app.post('/api/auth/mfa/desativar', autenticar, limiteMfa, comTratamento(async (
   if (MFA_OBRIGATORIO) return res.status(403).json({ erro: 'Neste ambiente a verificação em duas etapas é obrigatória e não pode ser desativada.' });
 
   const chave = `mfa-desativar|${u.id}`;
-  if (falhasAtuais(chave) >= MAX_FALHAS_MFA) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos.' });
+  if ((await falhasAtuais(chave)) >= MAX_FALHAS_MFA) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos.' });
   const corpo = req.body || {};
   const senhaOk = u.senhaHash ? senhaConfere(String(corpo.senha || ''), u.senhaSalt, u.senhaHash) : true;
   const conferido = senhaOk ? await conferirSegundoFator(u, corpo.codigo) : { ok: false };
   if (!senhaOk || !conferido.ok) {
-    registrarFalhaLogin(chave);
+    await registrarFalhaLogin(chave);
     return res.status(401).json({ erro: 'Senha ou código incorretos.' });
   }
-  falhasLogin.delete(chave);
+  await limparFalhas(chave);
 
   await atualizarMfa(u.id, { mfa_ativo: false, mfa_segredo: null, mfa_codigos: [], mfa_ultimo_passo: 0 });
   await eventoMfa('mfa_desativado', u, req);
@@ -4623,8 +4600,8 @@ async function garantirUsuarioRhTeste() {
   }
 })();
 
-// Exporta o app Express para a Vercel (função serverless) importar e invocar
-// diretamente, sem precisar abrir uma porta TCP própria.
+// Exporta o app Express: hospedagens serverless (ex.: Vercel) o importam e o
+// invocam como função, sem abrir porta TCP própria.
 module.exports = app;
 
 // Porta configurável via variável de ambiente PORT (padrão do Node/Express e
