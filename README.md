@@ -61,6 +61,14 @@ Os PDFs passam por uma interface única (`storage/armazenamento.js`: `salvar`, `
 |---|---|---|
 | `local` (padrão) | Pasta `uploads/` do servidor | Servidor próprio com disco persistente, desenvolvimento |
 | `supabase` | Bucket privado do Supabase Storage | Vercel e demais ambientes sem disco persistente |
+| `s3` | Bucket S3-compatível (AWS S3, MinIO, Cloudflare R2, Backblaze B2, Wasabi...) | Servidor do cliente com mais de uma réplica, ou qualquer nuvem sem Supabase |
+
+Para usar o driver `s3` (sem SDK: a assinatura AWS SigV4 é própria, em `storage/s3.js`):
+
+1. Crie um bucket **privado** e uma credencial só com leitura, escrita e remoção nele.
+2. Defina `ARMAZENAMENTO_DRIVER=s3`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` e `S3_REGION`. Para MinIO e demais compatíveis, informe também `S3_ENDPOINT` (ex.: `https://minio.suaempresa.com`); vazio significa AWS S3.
+3. Opcionais: `S3_PREFIXO` (pasta dentro do bucket, para vários clientes no mesmo bucket) e `S3_SSE=AES256` (criptografia em repouso, AWS).
+4. Teste a conexão com `npm run teste:s3` (grava, lê, remove e confere erros em um bucket de teste).
 
 Para usar o driver `supabase`:
 
@@ -232,7 +240,7 @@ cp .env.example .env
 | `SUPABASE_SERVICE_KEY` | *(obrigatória em produção)* | Chave **secret/service_role** do projeto. Só no servidor (`.env` ou variável da plataforma), nunca no navegador nem no Git. Com ela, o RLS fica ligado e a chave pública não acessa nada. |
 | `SUPABASE_KEY` | *(opcional)* | Chave pública (`anon`/`publishable`). Só é usada se `SUPABASE_SERVICE_KEY` não estiver definida (modo de desenvolvimento, com aviso no log). |
 | `API_KEY_ADMISSOES` | *(vazia = API desativada)* | Chave da API REST v1 (`/api/v1/admissoes`), mínimo de 16 caracteres. |
-| `ARMAZENAMENTO_DRIVER` | `local` | Onde ficam os PDFs: `local` ou `supabase` (ver "Armazenamento de arquivos"). |
+| `ARMAZENAMENTO_DRIVER` | `local` | Onde ficam os PDFs: `local`, `supabase` ou `s3` (ver "Armazenamento de arquivos"). |
 | `ARMAZENAMENTO_BUCKET` | `documentos` | Nome do bucket privado, quando o driver é `supabase`. |
 | `SUPABASE_SERVICE_KEY` | *(vazia)* | Chave secret/service_role, só no servidor, usada pelo driver `supabase`. |
 | `ARQUIVOS_SEGREDO` | *(deriva da chave do Supabase)* | Segredo (16+ caracteres) que assina as URLs de acesso aos PDFs. |
@@ -286,7 +294,7 @@ Guarde também uma cópia do volume `dados` (documentos enviados) e do `.env.cli
 docker compose -f docker-compose.cliente.yml exec -T db psql -U admitte -d admitte < db/postgres/01-esquema.sql
 ```
 
-**Mais de uma instância:** sessões e limites de tentativas (login, cadastro, MFA...) ficam no banco, então réplicas da aplicação somam as mesmas tentativas e uma sessão vale em qualquer uma (validado com duas réplicas sobre o mesmo Postgres). `LIMITES_COMPARTILHADOS=0` volta ao contador em memória de cada processo. **Limite conhecido:** os PDFs usam disco local (volume `dados`), então, para mais de uma réplica, todas precisam montar o mesmo volume ou usar o driver S3/MinIO (item 5.6 do roadmap). O driver é validado na bateria de testes (`npm run teste:postgres`, Postgres em memória) e a instalação completa foi validada em Postgres 16 real com Docker (cadastro, ficha, upload, chat, exclusão LGPD, MFA, backup com `pg_dump`, persistência após reiniciar e gatilho de auditoria bloqueando `UPDATE`, `DELETE` e `TRUNCATE`). Repita essa conferência a cada entrega a um cliente novo.
+**Mais de uma instância:** sessões e limites de tentativas (login, cadastro, MFA...) ficam no banco, então réplicas da aplicação somam as mesmas tentativas e uma sessão vale em qualquer uma (validado com duas réplicas sobre o mesmo Postgres). `LIMITES_COMPARTILHADOS=0` volta ao contador em memória de cada processo. **PDFs com várias réplicas:** use `ARMAZENAMENTO_DRIVER=s3` (MinIO no próprio servidor ou S3), para todas enxergarem os mesmos arquivos; com `local` todas precisam montar o mesmo volume `dados`. O driver é validado na bateria de testes (`npm run teste:postgres`, Postgres em memória) e a instalação completa foi validada em Postgres 16 real com Docker (cadastro, ficha, upload, chat, exclusão LGPD, MFA, backup com `pg_dump`, persistência após reiniciar e gatilho de auditoria bloqueando `UPDATE`, `DELETE` e `TRUNCATE`). Repita essa conferência a cada entrega a um cliente novo.
 
 ### Login com o Google
 

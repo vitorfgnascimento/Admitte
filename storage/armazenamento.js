@@ -10,8 +10,9 @@
 //   local    (padrão) disco do servidor (pasta uploads/). Bom para servidor
 //                     próprio com disco persistente; NÃO persiste em hospedagem serverless.
 //   supabase          bucket privado do Supabase Storage (ver README).
+//   s3                S3-compatível (AWS S3, MinIO, Cloudflare R2...), ver storage/s3.js.
 //
-// Trocar de plataforma = escrever outro driver com a mesma interface (ex.: S3).
+// Trocar de plataforma = escrever outro driver com a mesma interface.
 const fs = require('fs');
 const path = require('path');
 
@@ -93,7 +94,8 @@ function driverSupabase() {
 function criarArmazenamento({ pastaLocal }) {
   const escolhido = String(process.env.ARMAZENAMENTO_DRIVER || 'local').trim().toLowerCase();
   if (escolhido === 'supabase') return driverSupabase();
-  if (escolhido !== 'local') throw new Error(`ARMAZENAMENTO_DRIVER inválido: "${escolhido}" (use "local" ou "supabase").`);
+  if (escolhido === 's3') return require('./s3').driverS3();
+  if (escolhido !== 'local') throw new Error(`ARMAZENAMENTO_DRIVER inválido: "${escolhido}" (use "local", "supabase" ou "s3").`);
   return driverLocal(pastaLocal);
 }
 

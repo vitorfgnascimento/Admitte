@@ -19,6 +19,8 @@ const PORTA_FALSO = 54330;
 const PORTA_APP = 3010;
 const PORTA_PROD = 3011;
 const POSTGRES = process.env.TESTE_DRIVER === 'postgres';
+// TESTE_ARMAZENAMENTO=s3 roda a bateria com os PDFs em um servidor S3 (S3_* no ambiente).
+const ARMAZENAMENTO_TESTE = process.env.TESTE_ARMAZENAMENTO === 's3' ? 's3' : 'local';
 let BASE_PROD = null;
 const processos = [];
 let pastaTemp = null;
@@ -55,7 +57,7 @@ async function iniciarAmbiente() {
       ...extraPg(PORTA_APP),
       NODE_ENV: 'test', PORT: String(PORTA_APP), DIRETORIO_DADOS: pastaTemp,
       SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '',
-      ARMAZENAMENTO_DRIVER: 'local', SENHA_RH_TESTE: '', API_KEY_ADMISSOES: 'chave-api-de-teste-0123456789',
+      ARMAZENAMENTO_DRIVER: ARMAZENAMENTO_TESTE, SENHA_RH_TESTE: '', API_KEY_ADMISSOES: 'chave-api-de-teste-0123456789',
       MASTER_EMAIL: 'master@exemplo.test', MASTER_SENHA: 'Master-Senha-Forte-123',
       LIMITE_MFA_15MIN: '200', LIMITE_CADASTROS_HORA: '20', LIMITE_FICHAS_HORA: '12', LIMITE_UPLOADS_HORA: '200', LIMITE_MENSAGENS_10MIN: '200'
     },
@@ -127,6 +129,20 @@ async function suite(BASE, urlFalso) {
   const exportadas = (/module\.exports = \{([\s\S]*)\};/.exec(fonteRepo) || [, ''])[1].split(',').map((s) => s.replace(/driver: 'supabase'|\s/g, '')).filter(Boolean);
   const usadas = [...new Set([...fontePrincipal.matchAll(/\brepo\.([a-zA-Z]+)\(/g)].map((m) => m[1]))];
   t('5.1', 'Portabilidade', 'Toda função usada via repo.* existe no repositório', usadas.every((u) => exportadas.includes(u)), usadas.filter((u) => !exportadas.includes(u)).join(','));
+  // 5.6: driver de armazenamento S3 (testes puros; com servidor real: npm run teste:s3).
+  const s3Lib = require('../storage/s3');
+  const vetor = s3Lib.assinar({
+    metodo: 'GET', caminho: '/test.txt',
+    headers: { host: 'examplebucket.s3.amazonaws.com', range: 'bytes=0-9', 'x-amz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 'x-amz-date': '20130524T000000Z' },
+    payloadHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', regiao: 'us-east-1',
+    accessKeyId: 'AKIAIOSFODNN7EXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', amzDate: '20130524T000000Z'
+  });
+  t('5.6', 'Armazenamento S3', 'Assinatura SigV4 confere com o vetor de teste oficial da AWS', vetor.authorization.endsWith('f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41'), '');
+  const tentaS3 = (env) => { try { s3Lib.driverS3(env); return null; } catch (e) { return e.message; } };
+  t('5.6', 'Armazenamento S3', 'Sem bucket/credenciais o driver recusa iniciar', /exige S3_BUCKET/.test(tentaS3({}) || '') && /exige S3_BUCKET/.test(tentaS3({ S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'a' }) || ''), '');
+  t('5.6', 'Armazenamento S3', 'S3_ENDPOINT sem http(s):// é recusado', /http/.test(tentaS3({ S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 's', S3_ENDPOINT: 'ftp://exemplo.test' }) || ''), '');
+  t('5.6', 'Armazenamento S3', 'Configuração válida (AWS e endpoint próprio) inicia', tentaS3({ S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 's' }) === null && tentaS3({ S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 's', S3_ENDPOINT: 'http://minio:9000' }) === null, '');
+
   // 5.4: nenhuma particularidade de hospedagem fora de lib/plataforma.js.
   const plataformaLib = require('../lib/plataforma');
   const fontesComVercel = ['index.js', 'db/repositorio.js', 'db/repositorio-pg.js', 'db/repositorio-supabase.js', 'storage/armazenamento.js', 'lib/email.js', 'lib/marca.js', 'lib/mfa.js']
