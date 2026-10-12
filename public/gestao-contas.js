@@ -79,6 +79,14 @@
           });
         });
         botoes.push(alternar);
+        var resetarMfa = el('button', { type: 'button', class: 'gc-btn', texto: 'Redefinir 2 etapas' });
+        resetarMfa.addEventListener('click', function () {
+          if (!window.confirm('Redefinir a verificação em duas etapas de ' + c.nome + '? As sessões abertas serão encerradas e a pessoa terá de configurá-la de novo.')) return;
+          chamar('POST', '/' + encodeURIComponent(c.id) + '/mfa/resetar').then(function (r) {
+            mostrar(r.ok ? r.corpo.mensagem : (r.corpo.erro || 'Não foi possível redefinir.'), !r.ok);
+          });
+        });
+        botoes.push(resetarMfa);
         if (c.ativo) {
           var reenviar = el('button', { type: 'button', class: 'gc-btn', texto: 'Reenviar acesso' });
           reenviar.addEventListener('click', function () {

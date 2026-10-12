@@ -951,13 +951,13 @@
         }
       },
       {
-        nome: 'Registro com e-mail já cadastrado é recusado (400)',
+        nome: 'Registro com e-mail já cadastrado não revela a existência da conta (201, sem criar outra)',
         run: async () => {
           const r = await postJson('/auth/registrar', {
             nome: 'Duplicado', email: window.__emailAuth, senha: 'Senha-Forte-123', confirmarSenha: 'Senha-Forte-123',
             dataNascimento: '10/05/1990', cpf: '123.456.789-09', aceiteTermos: true
           });
-          return { ok: r.status === 400, detalhe: `status ${r.status} — ${r.corpo.erro || ''}` };
+          return { ok: r.status === 201 && !r.corpo.tokenAtivacao && !/já existe/i.test(r.corpo.mensagem || ''), detalhe: `status ${r.status} — ${r.corpo.mensagem || r.corpo.erro || ''}` };
         }
       },
       {

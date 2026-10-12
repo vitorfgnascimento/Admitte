@@ -4,8 +4,8 @@
 //   FALSO_PORTA=54330 node scripts/supabase-falso.js
 const http = require('http');
 
-const tabelas = { usuarios: [], sessoes: [], candidatos: [], mensagens_chat: [], etiquetas: [], configuracoes: [], recuperacoes_senha: [] };
-const chavePrimaria = { usuarios: 'id', sessoes: 'token', candidatos: 'id', mensagens_chat: 'id', etiquetas: 'id', configuracoes: 'id', recuperacoes_senha: 'id' };
+const tabelas = { usuarios: [], sessoes: [], candidatos: [], mensagens_chat: [], etiquetas: [], configuracoes: [], recuperacoes_senha: [], auditoria: [], solicitacoes_titular: [] };
+const chavePrimaria = { usuarios: 'id', sessoes: 'token', candidatos: 'id', mensagens_chat: 'id', etiquetas: 'id', configuracoes: 'id', recuperacoes_senha: 'id', auditoria: 'id', solicitacoes_titular: 'id' };
 const objetos = new Map(); // "bucket/caminho" -> Buffer
 
 function filtrar(linhas, params) {

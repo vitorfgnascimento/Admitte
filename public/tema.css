@@ -279,3 +279,17 @@ input[type="checkbox"] { accent-color: var(--verde-hover); }
   font: inherit; font-weight: 600; cursor: pointer;
 }
 .termos-rodape .termos-fechar { background: var(--verde); border-color: var(--verde); color: var(--tinta-botao); }
+
+/* ---------- Meus dados e privacidade (ficha) ---------- */
+.acoes-titular { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.btn-titular {
+  min-height: 2.5rem; padding: 0.5rem 1rem; border-radius: var(--r-controle);
+  border: 1px solid var(--borda); background: var(--papel); color: var(--tinta);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.btn-titular:hover { background: var(--creme-2); }
+.btn-titular-perigo { color: var(--perigo); border-color: var(--perigo-borda); }
+.btn-titular-perigo:hover { background: var(--perigo-fundo); }
+
+/* Logo em imagem (marca configuravel): cantos suaves, sem distorcer */
+img.ic-logo { border-radius: 0.5rem; object-fit: contain; flex: none; }

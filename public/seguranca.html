@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Segurança da conta - Onboarding Digital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/tema.css">
+  <link rel="stylesheet" href="/gestao-contas.css">
+</head>
+<body>
+  <main class="gc-pagina">
+    <header class="gc-topo">
+      <div>
+        <h1>Segurança da conta</h1>
+        <p class="gc-sub">Verificação em duas etapas: além da senha, o acesso pede um código de 6 dígitos gerado no seu celular (Google Authenticator, Microsoft Authenticator, Authy ou similar).</p>
+      </div>
+      <nav class="gc-nav" aria-label="Navegação">
+        <a class="gc-btn" id="linkVoltar" href="/rh.html">Voltar ao painel</a>
+        <button type="button" class="gc-btn" id="btnSair">Sair</button>
+      </nav>
+    </header>
+
+    <section class="gc-cartao">
+      <div class="gc-aviso" id="aviso" role="status"></div>
+
+      <!-- Situação -->
+      <p id="situacao" class="gc-sub" style="max-width:none"></p>
+
+      <!-- Configuração: QR + código -->
+      <div id="blocoConfigurar" hidden>
+        <p>1. Abra o aplicativo autenticador e <strong>escaneie o QR code</strong> (ou digite a chave manualmente).</p>
+        <img id="qr" alt="QR code para o aplicativo autenticador" width="220" height="220" style="background:#fff;padding:8px;border-radius:8px;border:1px solid var(--borda)">
+        <p>Chave manual: <code id="segredo" style="word-break:break-all"></code></p>
+        <p>2. Digite o código de 6 dígitos que o aplicativo mostra para confirmar:</p>
+        <form id="formAtivar" class="gc-form" style="grid-template-columns: 14rem auto">
+          <div class="gc-campo"><label for="codigoAtivar">Código</label><input type="text" id="codigoAtivar" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div>
+          <button type="submit" class="gc-btn gc-btn-primario">Ativar</button>
+        </form>
+      </div>
+
+      <!-- Códigos de recuperação (mostrados uma única vez) -->
+      <div id="blocoCodigos" hidden>
+        <p><strong>Guarde estes códigos de recuperação em local seguro.</strong> Cada um vale uma vez e substitui o aplicativo se você perder o celular. Eles não serão mostrados de novo.</p>
+        <pre id="listaCodigos" style="font-size:1.05rem;line-height:1.7"></pre>
+        <button type="button" class="gc-btn" id="btnBaixarCodigos">Baixar como arquivo .txt</button>
+      </div>
+
+      <!-- Desativar -->
+      <div id="blocoDesativar" hidden>
+        <h2 style="font-size:1.15rem">Desativar a verificação em duas etapas</h2>
+        <form id="formDesativar" class="gc-form" style="grid-template-columns: 14rem 14rem auto">
+          <div class="gc-campo"><label for="senhaDesativar">Senha</label><input type="password" id="senhaDesativar" autocomplete="current-password" required></div>
+          <div class="gc-campo"><label for="codigoDesativar">Código</label><input type="text" id="codigoDesativar" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required></div>
+          <button type="submit" class="gc-btn">Desativar</button>
+        </form>
+      </div>
+
+      <button type="button" class="gc-btn gc-btn-primario" id="btnConfigurar" hidden>Configurar verificação em duas etapas</button>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var token = localStorage.getItem('onboarding_token');
+      var aviso = document.getElementById('aviso');
+      var $ = function (id) { return document.getElementById(id); };
+      var codigosAtuais = [];
+
+      function sair() {
+        if (token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
+        localStorage.removeItem('onboarding_token');
+        localStorage.removeItem('onboarding_usuario');
+        window.location.href = '/';
+      }
+      $('btnSair').addEventListener('click', sair);
+      if (!token) { window.location.href = '/'; return; }
+
+      function chamar(metodo, caminho, dados) {
+        return fetch(caminho, {
+          method: metodo,
+          headers: Object.assign({ Authorization: 'Bearer ' + token }, dados ? { 'Content-Type': 'application/json' } : {}),
+          body: dados ? JSON.stringify(dados) : undefined
+        }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, c: j }; }); });
+      }
+      function msg(texto, erro) { aviso.textContent = texto; aviso.className = 'gc-aviso ' + (erro ? 'gc-erro' : 'gc-ok'); }
+
+      function atualizar() {
+        return chamar('GET', '/api/auth/mfa/status').then(function (r) {
+          if (!r.ok) { window.location.href = '/'; return; }
+          var s = r.c;
+          if (!s.disponivel) { window.location.href = '/ficha.html'; return; }
+          $('blocoConfigurar').hidden = true;
+          $('btnConfigurar').hidden = s.ativo;
+          $('blocoDesativar').hidden = !s.ativo || s.obrigatorio;
+          $('situacao').textContent = s.ativo
+            ? 'Situação: ATIVA. Códigos de recuperação restantes: ' + s.codigosRestantes + '.' + (s.obrigatorio ? ' (Obrigatória neste ambiente.)' : '')
+            : 'Situação: desativada.' + (s.obrigatorio ? ' Neste ambiente ela é obrigatória: configure para acessar o painel.' : '');
+        });
+      }
+
+      $('btnConfigurar').addEventListener('click', function () {
+        chamar('POST', '/api/auth/mfa/configurar').then(function (r) {
+          if (!r.ok) { msg(r.c.erro || 'Não foi possível iniciar a configuração.', true); return; }
+          $('qr').src = r.c.qr;
+          $('segredo').textContent = r.c.segredo;
+          $('blocoConfigurar').hidden = false;
+          $('btnConfigurar').hidden = true;
+          $('codigoAtivar').focus();
+          msg('', false);
+        });
+      });
+
+      $('formAtivar').addEventListener('submit', function (e) {
+        e.preventDefault();
+        chamar('POST', '/api/auth/mfa/ativar', { codigo: $('codigoAtivar').value.trim() }).then(function (r) {
+          if (!r.ok) { msg(r.c.erro || 'Código inválido.', true); return; }
+          codigosAtuais = r.c.codigosRecuperacao || [];
+          $('listaCodigos').textContent = codigosAtuais.join('\n');
+          $('blocoCodigos').hidden = false;
+          $('formAtivar').reset();
+          msg(r.c.mensagem, false);
+          atualizar();
+        });
+      });
+
+      $('btnBaixarCodigos').addEventListener('click', function () {
+        var blob = new Blob(['Onboarding Digital - codigos de recuperacao (use cada um uma vez)\n\n' + codigosAtuais.join('\n') + '\n'], { type: 'text/plain' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'codigos-recuperacao.txt';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      });
+
+      $('formDesativar').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!window.confirm('Desativar a verificação em duas etapas desta conta?')) return;
+        chamar('POST', '/api/auth/mfa/desativar', { senha: $('senhaDesativar').value, codigo: $('codigoDesativar').value.trim() }).then(function (r) {
+          msg(r.ok ? r.c.mensagem : (r.c.erro || 'Não foi possível desativar.'), !r.ok);
+          if (r.ok) { $('formDesativar').reset(); $('blocoCodigos').hidden = true; atualizar(); }
+        });
+      });
+
+      // Voltar ao painel certo (master tem o próprio painel).
+      try {
+        var u = JSON.parse(localStorage.getItem('onboarding_usuario') || '{}');
+        if (u.tipo === 'master') $('linkVoltar').href = '/master.html';
+      } catch (e) { /* mantém o padrão */ }
+
+      atualizar();
+    })();
+  </script>
+</body>
+</html>

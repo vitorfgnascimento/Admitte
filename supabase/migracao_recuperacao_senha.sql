@@ -16,6 +16,5 @@ create table if not exists recuperacoes_senha (
 create index if not exists idx_recuperacoes_token on recuperacoes_senha(token_hash);
 create index if not exists idx_recuperacoes_usuario on recuperacoes_senha(usuario_id);
 
--- RLS LIGADO e sem politicas: so o backend Express (chave secret) acessa.
-alter table recuperacoes_senha enable row level security;
-revoke all on table recuperacoes_senha from anon, authenticated;
+-- O RLS desta tabela e ligado, junto com o das demais, por ativar_rls.sql: aplique
+-- aquele arquivo depois que o servidor estiver usando SUPABASE_SERVICE_KEY.

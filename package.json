@@ -8,6 +8,7 @@
     "start": "node index.js",
     "verificar:rls": "node scripts/verificar-rls.js",
     "teste:seguranca": "node scripts/teste-seguranca.js",
+    "teste:postgres": "node scripts/teste-postgres.js",
     "build": "echo \"Nenhum build necessario - aplicacao servida diretamente pelo Express (local) ou pela funcao serverless da Vercel.\""
   },
   "repository": {
@@ -31,6 +32,11 @@
     "google-auth-library": "^11.1.0",
     "multer": "^2.3.0",
     "nodemailer": "^10.1.0",
-    "pdfkit": "^0.20.2"
+    "pdfkit": "^0.20.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.5"
   }
 }

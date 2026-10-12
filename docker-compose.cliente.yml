@@ -1,0 +1,67 @@
+# Instalação COMPLETA no servidor do cliente: aplicação + Postgres próprio, sem
+# Supabase e sem Vercel. Guia: README, seção "Instalação no servidor do cliente".
+#
+#   1) cp .env.cliente.example .env.cliente   (e preencha)
+#   2) docker compose -f docker-compose.cliente.yml --env-file .env.cliente up -d --build
+#
+# O banco NÃO é publicado na máquina (sem "ports"): só a aplicação o acessa,
+# pela rede interna do compose. Em produção, ponha um proxy HTTPS (Caddy,
+# Nginx, Traefik) na frente da aplicação e use TRUST_PROXY=1.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-admitte}
+      POSTGRES_USER: ${POSTGRES_USER:-admitte}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env.cliente}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Esquema e gatilho de auditoria rodam automaticamente na criação do banco.
+      - ./db/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admitte} -d ${POSTGRES_DB:-admitte}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      TRUST_PROXY: "${TRUST_PROXY:-1}"
+      BANCO_DRIVER: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER:-admitte}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-admitte}
+      ARMAZENAMENTO_DRIVER: local
+      DIRETORIO_DADOS: /dados
+      APP_URL: ${APP_URL:?Defina APP_URL (endereço público, ex.: https://rh.cliente.com.br)}
+      ARQUIVOS_SEGREDO: ${ARQUIVOS_SEGREDO:?Defina ARQUIVOS_SEGREDO (mín. 16 caracteres)}
+      MFA_CHAVE: ${MFA_CHAVE:?Defina MFA_CHAVE (mín. 16 caracteres)}
+      MFA_OBRIGATORIO: ${MFA_OBRIGATORIO:-1}
+      MASTER_EMAIL: ${MASTER_EMAIL:-}
+      MASTER_SENHA: ${MASTER_SENHA:-}
+      API_KEY_ADMISSOES: ${API_KEY_ADMISSOES:-}
+      MARCA_NOME: ${MARCA_NOME:-}
+      MARCA_LOGO_URL: ${MARCA_LOGO_URL:-}
+      MARCA_COR: ${MARCA_COR:-}
+      MARCA_COR_ESCURA: ${MARCA_COR_ESCURA:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_REMETENTE: ${EMAIL_REMETENTE:-}
+      RETENCAO_DIAS: ${RETENCAO_DIAS:-365}
+    volumes:
+      # PDFs enviados, planilha Mestre e reserva local da auditoria.
+      - dados:/dados
+
+volumes:
+  pgdata:
+  dados:

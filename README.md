@@ -22,10 +22,13 @@ public/
   testes.html   -> bateria de testes automatizados contra a API em execução
 
 index.js        -> servidor Express único, expõe as rotas dos módulos
+db/repositorio.js -> ÚNICO ponto de acesso ao banco; escolhe o driver por BANCO_DRIVER (supabase | postgres)
+db/repositorio-supabase.js, db/repositorio-pg.js -> drivers (mesma interface: listar*/buscar*/gravar*)
+db/postgres/*.sql -> esquema completo para Postgres próprio (docker-compose.cliente.yml)
 db/supabase.js  -> cliente Supabase compartilhado (exige SUPABASE_URL e SUPABASE_SERVICE_KEY; aceita SUPABASE_KEY só em desenvolvimento)
 supabase/       -> schema.sql + migrações SQL para criar/atualizar as tabelas
 
-auditoria.json  -> trilha de auditoria (arquivo local, não versionado - LGPD)
+auditoria.json  -> reserva local da trilha de auditoria (só é usada se a gravação na tabela `auditoria` falhar; não versionado - LGPD)
 uploads/        -> PDFs enviados pelos candidatos e contratos assinados (disco local, não versionado - LGPD)
 relatorio_geral_admissoes.xlsx -> planilha Mestre, regenerada a cada gravação (não versionada - LGPD)
 ```
@@ -35,11 +38,11 @@ relatorio_geral_admissoes.xlsx -> planilha Mestre, regenerada a cada gravação 
 | Dado | Onde fica | Observação |
 |---|---|---|
 | Fichas, usuários, sessões, chat, etiquetas, configurações do RH | **Supabase** (Postgres) | Tabelas `candidatos`, `usuarios`, `sessoes`, `mensagens_chat`, `etiquetas`, `configuracoes`. Compartilhado: qualquer instância com as mesmas credenciais enxerga os mesmos dados. |
-| Trilha de auditoria (`auditoria.json`) | **Disco local** | Fica na máquina/instância que rodou o servidor. |
+| Trilha de auditoria (LGPD) | **Supabase**, tabela `auditoria` | Somente de acréscimo: um gatilho no banco recusa UPDATE, DELETE e TRUNCATE. Consulta por ficha em `GET /api/rh/fichas/:id/auditoria`. O `auditoria.json` local é só reserva se a gravação no banco falhar. |
 | PDFs enviados, contratos assinados e ficha em PDF | **Armazenamento configurável** (`ARMAZENAMENTO_DRIVER`) | `local` (padrão): pasta `uploads/` do servidor. `supabase`: bucket privado do Supabase Storage, que persiste na Vercel. Veja "Armazenamento de arquivos". |
 | Planilha Mestre (`.xlsx`) | **Disco local** | Gerada a partir do Supabase a cada gravação. |
 
-> **Atenção (deploy na Vercel):** a Vercel é serverless e só permite gravar em `/tmp`, que é efêmero. Lá, `auditoria.json` e a planilha Mestre **não persistem** entre execuções (a trilha de auditoria ainda precisa migrar para uma tabela do Supabase - veja "Próximas fases"). Os PDFs persistem se `ARMAZENAMENTO_DRIVER=supabase`.
+> **Atenção (deploy na Vercel):** a Vercel é serverless e só permite gravar em `/tmp`, que é efêmero. Lá, a planilha Mestre **não persiste** entre execuções (é regenerada a cada pedido). A trilha de auditoria fica na tabela `auditoria` (rode `supabase/migracao_auditoria.sql`) e os PDFs persistem se `ARMAZENAMENTO_DRIVER=supabase`.
 
 ### Segurança: cabeçalhos, limites e testes
 
@@ -118,7 +121,7 @@ Rotas do backend dedicadas ao painel: `GET /api/rh/fichas`, `PATCH /api/rh/ficha
 
 Foco em documentação, conformidade com a LGPD e preparação para publicar o MVP em um serviço de nuvem:
 
-- **Trilha de auditoria (LGPD) ampliada** - além de alterações de status, pendências de documento e decisão final, agora **toda mensagem de chat** (RH ou candidato) também é registrada em `auditoria.json` com timestamp ISO e IP de origem da requisição; a própria mensagem, em `candidatos.json`, também carrega seu IP de origem.
+- **Trilha de auditoria (LGPD) ampliada** - além de alterações de status, pendências de documento e decisão final, agora **toda mensagem de chat** (RH ou candidato) também é registrada na tabela `auditoria` com timestamp ISO e IP de origem da requisição; a própria mensagem, em `candidatos.json`, também carrega seu IP de origem.
 - **Porta configurável via `PORT`** - o servidor lê `process.env.PORT` (padrão das plataformas de deploy em nuvem, como Render e Railway, que injetam essa variável automaticamente), caindo para `3001` em execução local. Arquivo `.env.example` documenta a variável.
 - **README consolidado** - arquitetura completa do projeto, todas as funcionalidades das Etapas 1 e 2 documentadas, e as duas formas de rodar localmente.
 
@@ -171,9 +174,31 @@ Recursos incluídos depois das Etapas 1 a 4 (cobertos pelas migrações em `supa
 - **Momento 3 (ficha.html):** a mesma frase e link ao lado do botão que conclui a assinatura digital (o pop-up traz a cláusula sobre a validade da assinatura eletrônica); backend grava `consentimentoContratoLGPD` (com hash SHA-256 das minutas) na ficha.
 - **Painel do RH (rh.html):** card "Trilha de Auditoria e Conformidade LGPD" mostra o status dos dois consentimentos (data/hora e IP) e um botão "Visualizar Log de Auditoria" que exibe o JSON bruto dos eventos daquela ficha (`GET /api/rh/fichas/:id/auditoria`).
 
+### Direitos do titular e retenção (LGPD, art. 18)
+
+- **Candidato (seção "Meus dados e privacidade" em `ficha.html`):** baixa uma cópia dos próprios dados (`GET /api/meus-dados/exportar`, sem senhas nem tokens) e pede a exclusão (`POST /api/meus-dados/solicitar-exclusao`, idempotente) acompanhando o status do pedido.
+- **RH/admin (`titulares.html`, botão "Pedidos LGPD"):** lista os pedidos; **executar** anonimiza a ficha (dados pessoais removidos), apaga PDFs e mensagens e exclui a conta; **recusar** exige um motivo, que o titular vê. Fichas de **contratados** não são excluídas (retenção legal, art. 16, I): a execução retorna 409 e o pedido deve ser recusado com o motivo.
+- **Retenção (somente admin):** `POST /api/admin/retencao` simula (padrão) ou executa a anonimização de fichas de não contratados sem atualização há mais de `RETENCAO_DIAS` (padrão 365), exceto as do Banco de Talentos.
+- A trilha de auditoria é mantida (somente de acréscimo) e registra exportação, pedido, execução, recusa e exclusão da conta.
+
+### Marca por cliente (white-label)
+
+- **Nome padrão:** Admitte. Cada instalação pode ter o próprio nome, logo e cores apenas com variáveis de ambiente, sem editar código: `MARCA_NOME`, `MARCA_LOGO_URL` (caminho em `public/` ou `https://...`), `MARCA_COR` e `MARCA_COR_ESCURA` (`#RRGGBB`).
+- **Onde aparece:** título e cabeçalhos das telas, e-mails, PDF da ficha, termos de privacidade e o nome no aplicativo autenticador. O layout é o mesmo para todos os clientes.
+- **Segurança:** o nome é escapado; o logo só aceita imagem local ou https; cor fora do formato é ignorada. `GET /api/marca` devolve a configuração atual.
+
+### Verificação em duas etapas (MFA, TOTP)
+
+- **Quem pode usar:** `rh`, `admin` e `master` (página `seguranca.html`, link "Segurança da conta"). Funciona com Google Authenticator, Microsoft Authenticator, Authy, 1Password etc.; não depende de serviço externo.
+- **Ativar:** escanear o QR (ou digitar a chave) e confirmar com um código de 6 dígitos; o sistema mostra uma única vez 10 **códigos de recuperação** (uso único).
+- **Login:** a senha sozinha não gera sessão em contas com MFA; o servidor devolve um desafio assinado de 5 minutos que só vale com o código (`POST /api/auth/mfa/verificar`). Vale também para o login com Google. Um código já usado não funciona de novo e 5 erros seguidos bloqueiam por 15 minutos.
+- **Perdeu o celular e os códigos:** o admin redefine o MFA dos operadores e o master o dos administradores ("Redefinir 2 etapas").
+- **Em repouso:** o segredo TOTP é cifrado (AES-256-GCM) e os códigos de recuperação só existem como hash.
+- **Obrigatoriedade:** `MFA_OBRIGATORIO=1` exige MFA para toda a equipe (sem ele, o painel responde 403 `mfa_obrigatoria` e o login leva à página de segurança). Por padrão é opcional, porque a conta pública de demonstração do RH (`onboarding123`) não usa MFA. Defina `MFA_CHAVE` (valor estável) em produção.
+
 ## Próximas fases do roteiro de desenvolvimento
 
-- Mover a trilha de auditoria para uma tabela no Supabase, para que persista em ambientes serverless (pré-requisito do deploy). Os PDFs já têm persistência via `ARMAZENAMENTO_DRIVER=supabase`.
+- Os PDFs (`ARMAZENAMENTO_DRIVER=supabase`) e a trilha de auditoria (tabela `auditoria`) já persistem em ambientes serverless; falta aplicar as migrações no banco de produção.
 - Deploy do MVP em nuvem (a configuração atual já inclui `vercel.json`; Render/Railway continuam possíveis via a variável `PORT`).
 - Gestão de credenciais reais do Google OAuth para o ambiente de produção.
 - URLs amigáveis sem `.html` (planejado no roadmap, mantido fora do repositório).
@@ -224,8 +249,40 @@ cp .env.example .env
    3. `migracao_etiquetas.sql` - etiquetas
    4. `migracao_fotos_mensagem_contratacao.sql` - fotos de perfil e mensagem de contratação
    4b. `migracao_recuperacao_senha.sql` - recuperação/definição de senha (tabela `recuperacoes_senha`)
-   5. `ativar_rls.sql` - **liga o RLS** nas 6 tabelas, sem políticas: só o servidor (chave secret) acessa o banco. Aplique somente depois que o servidor já estiver rodando com `SUPABASE_SERVICE_KEY`.
+   4c. `migracao_auditoria.sql` - trilha de auditoria imutável (tabela `auditoria`, com gatilho append-only)
+   4d. `migracao_titular.sql` - direitos do titular (LGPD): tabela `solicitacoes_titular` e coluna `candidatos.anonimizado_em`
+   4e. `migracao_mfa.sql` - verificação em duas etapas: colunas `mfa_*` em `usuarios`
+   5. `ativar_rls.sql` - **liga o RLS** nas 9 tabelas, sem políticas: só o servidor (chave secret) acessa o banco. Aplique somente depois que o servidor já estiver rodando com `SUPABASE_SERVICE_KEY`.
 3. Para testes pessoais, use um projeto Supabase próprio, para não alterar dados compartilhados.
+
+### Instalação no servidor do cliente (Postgres próprio, sem Supabase nem Vercel)
+
+Para vender o sistema instalado na infraestrutura do próprio cliente. A aplicação e o banco rodam em contêineres; os dados ficam em volumes do servidor dele.
+
+**O que o servidor precisa:** Docker 24+ com Compose v2, um domínio com HTTPS (proxy reverso como Caddy, Nginx ou Traefik na frente da porta `3001`) e, para os e-mails, uma conta SMTP.
+
+1. Copie o projeto para o servidor e crie o arquivo de variáveis:
+```bash
+cp .env.cliente.example .env.cliente
+```
+2. Preencha `.env.cliente`: `POSTGRES_PASSWORD`, `APP_URL`, `ARQUIVOS_SEGREDO`, `MFA_CHAVE` (use `openssl rand -hex 32`), `MASTER_EMAIL`/`MASTER_SENHA`, marca (`MARCA_*`) e SMTP.
+3. Suba tudo (na primeira vez o Postgres cria o esquema sozinho, a partir de `db/postgres/`):
+```bash
+docker compose -f docker-compose.cliente.yml --env-file .env.cliente up -d --build
+```
+4. Acesse `APP_URL`, entre com a conta master, crie a conta **admin** do cliente (`master.html`) e peça a ele que ative a verificação em duas etapas.
+
+**Como funciona:** `BANCO_DRIVER=postgres` troca o acesso ao banco para `db/repositorio-pg.js` (mesma interface do driver Supabase); o banco **não** é publicado na máquina, só a aplicação o alcança pela rede interna do compose. PDFs e a planilha Mestre ficam no volume `dados`; o Postgres, no volume `pgdata`.
+
+**Backup (faça diariamente):**
+```bash
+docker compose -f docker-compose.cliente.yml exec -T db pg_dump -U admitte admitte > backup-$(date +%F).sql
+```
+Guarde também uma cópia do volume `dados` (documentos enviados) e do `.env.cliente`.
+
+**Atualizar a versão:** `git pull` e rode o mesmo `up -d --build`. Migrações novas são arquivos aditivos em `db/postgres/`.
+
+**Limites conhecidos desta versão:** os PDFs usam disco local (um driver S3/MinIO é o item 5.6 do roadmap) e os limites de tentativas ficam em memória, então rode **uma instância** da aplicação (item 5.5). O driver é validado na bateria de testes (`npm run teste:postgres`) sobre um Postgres em memória; antes da primeira entrega a um cliente, rode a instalação completa em um Postgres real e confira o gatilho de auditoria (`UPDATE` em `auditoria` deve falhar).
 
 ### Login com o Google
 

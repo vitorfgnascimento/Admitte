@@ -5,3 +5,9 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+# Nada de documentos internos, dados nem segredos dentro da imagem
+ROADMAP_SEGURANCA.md
+ROADMAP.md
+uploads
+*.json.bak
+docker-compose*.yml

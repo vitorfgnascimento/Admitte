@@ -809,6 +809,17 @@
 
     </div><!-- /ficha-container -->
 
+    <!-- DIREITOS DO TITULAR (LGPD, art. 18): cópia dos dados e pedido de exclusão -->
+    <section class="secao-ficha" id="secaoMeusDados" aria-labelledby="tituloMeusDados" hidden>
+      <h3 id="tituloMeusDados">Meus dados e privacidade</h3>
+      <p class="aviso-termos">Você pode baixar uma cópia dos seus dados ou pedir a exclusão deles (LGPD, art. 18). O pedido de exclusão é analisado pelo RH da empresa; dados de candidatos já contratados precisam ser mantidos por obrigação legal.</p>
+      <div class="acoes-titular">
+        <button type="button" class="btn-titular" id="btnExportarDados">Baixar meus dados</button>
+        <button type="button" class="btn-titular btn-titular-perigo" id="btnSolicitarExclusao">Solicitar exclusão dos meus dados</button>
+      </div>
+      <div id="mensagemTitular" role="status" class="aviso-termos"></div>
+    </section>
+
     <p class="rodape-contato" id="contatoRh" hidden>Dúvidas? Fale com o RH: <a id="contatoRhLink" href="#"></a></p>
 
       </div><!-- /coluna-principal -->
@@ -2431,6 +2442,60 @@
       atualizarCartaoPerfil();
       atualizarProgresso();
     }
+
+    // =========================================================================
+    // MEUS DADOS E PRIVACIDADE (LGPD, art. 18): exportar e pedir exclusão
+    // =========================================================================
+    (function () {
+      const secao = document.getElementById('secaoMeusDados');
+      if (!secao) return;
+      secao.hidden = !tokenSessao();
+      if (secao.hidden) return;
+      const msg = document.getElementById('mensagemTitular');
+      const mostrar = (texto, erro) => { msg.textContent = texto; msg.style.color = erro ? 'var(--perigo)' : 'var(--tinta-2)'; };
+
+      function rotuloSolicitacao(s) {
+        if (s.status === 'pendente') return 'Seu pedido de exclusão está em análise pelo RH.';
+        if (s.status === 'recusada') return 'Seu último pedido de exclusão foi recusado: ' + (s.motivoRecusa || 'sem motivo informado') + '.';
+        return '';
+      }
+      fetch('/api/meus-dados/solicitacoes', { headers: cabecalhosAutenticados() })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((lista) => {
+          const ultima = lista.slice().sort((a, b) => String(b.criadoEm).localeCompare(String(a.criadoEm)))[0];
+          if (ultima) mostrar(rotuloSolicitacao(ultima), false);
+        })
+        .catch(() => {});
+
+      document.getElementById('btnExportarDados').addEventListener('click', async () => {
+        try {
+          const r = await fetch('/api/meus-dados/exportar', { headers: cabecalhosAutenticados() });
+          if (!r.ok) { mostrar('Não foi possível gerar a cópia agora.', true); return; }
+          const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'meus-dados.json';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+          mostrar('Cópia dos seus dados baixada.', false);
+        } catch (e) { mostrar('Falha ao comunicar com o servidor.', true); }
+      });
+
+      document.getElementById('btnSolicitarExclusao').addEventListener('click', async () => {
+        if (!window.confirm('Solicitar a exclusão dos seus dados? Se o pedido for aceito, sua ficha, seus documentos e sua conta serão removidos e você perderá o acesso.')) return;
+        try {
+          const r = await fetch('/api/meus-dados/solicitar-exclusao', {
+            method: 'POST',
+            headers: cabecalhosAutenticados({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ confirmar: true })
+          });
+          const c = await r.json();
+          mostrar(c.mensagem || c.erro || 'Pedido enviado.', !r.ok);
+        } catch (e) { mostrar('Falha ao comunicar com o servidor.', true); }
+      });
+    })();
 
     inicializar();
   </script>

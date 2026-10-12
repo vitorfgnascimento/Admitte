@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Pedidos de titulares (LGPD) - Onboarding Digital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/tema.css">
+  <link rel="stylesheet" href="/gestao-contas.css">
+</head>
+<body>
+  <main class="gc-pagina">
+    <header class="gc-topo">
+      <div>
+        <h1>Pedidos de titulares (LGPD)</h1>
+        <p class="gc-sub">Pedidos de exclusão de dados feitos pelos candidatos. Excluir significa anonimizar a ficha, apagar documentos e mensagens e remover a conta. Candidatos já contratados têm retenção legal.</p>
+      </div>
+      <nav class="gc-nav" aria-label="Navegação">
+        <a class="gc-btn" href="/rh.html">Voltar ao painel do RH</a>
+        <button type="button" class="gc-btn" id="btnSair">Sair</button>
+      </nav>
+    </header>
+
+    <section class="gc-cartao">
+      <div class="gc-aviso" id="aviso" role="status"></div>
+      <div class="gc-tabela-caixa">
+        <table class="gc-tabela">
+          <thead><tr><th>Candidato</th><th>Situação da ficha</th><th>Pedido em</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="corpo"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="gc-cartao" id="blocoRetencao" style="margin-top:1.25rem" hidden>
+      <h2 style="font-size:1.25rem">Política de retenção</h2>
+      <p class="gc-sub" style="max-width:none">Anonimiza fichas de candidatos <strong>não contratados</strong> (reprovados ou em análise) sem atualização há mais de N dias, exceto as do Banco de Talentos. Comece sempre por simular.</p>
+      <div class="gc-form" style="grid-template-columns: 12rem auto auto; margin-top:0.75rem">
+        <div class="gc-campo"><label for="dias">Prazo (dias)</label><input type="number" id="dias" min="1" value="365"></div>
+        <button type="button" class="gc-btn" id="btnSimular">Simular</button>
+        <button type="button" class="gc-btn gc-btn-primario" id="btnExecutarRetencao" disabled>Executar retenção</button>
+      </div>
+      <div class="gc-aviso" id="avisoRetencao" role="status"></div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var token = localStorage.getItem('onboarding_token');
+      var aviso = document.getElementById('aviso');
+      var corpo = document.getElementById('corpo');
+      var papel = null;
+
+      function sair() {
+        if (token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
+        localStorage.removeItem('onboarding_token');
+        localStorage.removeItem('onboarding_usuario');
+        window.location.href = '/';
+      }
+      document.getElementById('btnSair').addEventListener('click', sair);
+      if (!token) { window.location.href = '/'; return; }
+
+      function chamar(metodo, caminho, dados) {
+        return fetch(caminho, {
+          method: metodo,
+          headers: Object.assign({ Authorization: 'Bearer ' + token }, dados ? { 'Content-Type': 'application/json' } : {}),
+          body: dados ? JSON.stringify(dados) : undefined
+        }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, c: j }; }); });
+      }
+      function msg(el, texto, erro) { el.textContent = texto; el.className = 'gc-aviso ' + (erro ? 'gc-erro' : 'gc-ok'); }
+      function td(texto) { var e = document.createElement('td'); e.textContent = texto; return e; }
+      function botao(texto, fn, primario) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'gc-btn' + (primario ? ' gc-btn-primario' : ''); b.textContent = texto;
+        b.addEventListener('click', fn);
+        return b;
+      }
+      var ROTULO_STATUS = { pendente: 'Pendente', executada: 'Executada', recusada: 'Recusada' };
+      var ROTULO_FICHA = { EM_ANALISE: 'Em análise', PENDENTE_ASSINATURA: 'Pendente de assinatura', REPROVADO: 'Reprovado', CONTRATACAO_CONCLUIDA: 'Contratação concluída' };
+
+      function carregar() {
+        chamar('GET', '/api/rh/solicitacoes-titular').then(function (r) {
+          corpo.textContent = '';
+          if (!r.ok) { msg(aviso, r.c.erro || 'Não foi possível carregar os pedidos.', true); return; }
+          if (!r.c.length) {
+            var vazio = document.createElement('tr');
+            var cel = td('Nenhum pedido de titular até agora.'); cel.colSpan = 5; cel.className = 'gc-vazio';
+            vazio.appendChild(cel); corpo.appendChild(vazio); return;
+          }
+          r.c.forEach(function (s) {
+            var linha = document.createElement('tr');
+            linha.appendChild(td(s.nome || '(conta sem ficha)'));
+            linha.appendChild(td(s.statusFicha ? (ROTULO_FICHA[s.statusFicha] || s.statusFicha) : '-'));
+            linha.appendChild(td(new Date(s.criadoEm).toLocaleString('pt-BR')));
+            linha.appendChild(td((ROTULO_STATUS[s.status] || s.status) + (s.motivoRecusa ? ': ' + s.motivoRecusa : '')));
+            var acoes = document.createElement('td'); acoes.className = 'gc-acoes';
+            if (s.status === 'pendente') {
+              if (s.retencaoLegal) {
+                var nota = document.createElement('span'); nota.className = 'gc-voce'; nota.textContent = 'Retenção legal';
+                nota.title = s.retencaoLegal; acoes.appendChild(nota);
+              } else {
+                acoes.appendChild(botao('Excluir dados', function () {
+                  if (!window.confirm('Excluir (anonimizar) os dados deste titular? Esta ação não pode ser desfeita.')) return;
+                  chamar('POST', '/api/rh/solicitacoes-titular/' + encodeURIComponent(s.id) + '/executar').then(function (x) {
+                    msg(aviso, x.ok ? x.c.mensagem : (x.c.erro || 'Não foi possível executar.'), !x.ok);
+                    carregar();
+                  });
+                }, true));
+              }
+              acoes.appendChild(botao('Recusar', function () {
+                var motivo = window.prompt('Motivo da recusa (aparece para o titular):', s.retencaoLegal || '');
+                if (motivo === null) return;
+                chamar('POST', '/api/rh/solicitacoes-titular/' + encodeURIComponent(s.id) + '/recusar', { motivo: motivo }).then(function (x) {
+                  msg(aviso, x.ok ? x.c.mensagem : (x.c.erro || 'Não foi possível recusar.'), !x.ok);
+                  carregar();
+                });
+              }));
+            }
+            linha.appendChild(acoes);
+            corpo.appendChild(linha);
+          });
+        });
+      }
+
+      // Retenção: só o administrador da empresa
+      var avisoRet = document.getElementById('avisoRetencao');
+      var btnExec = document.getElementById('btnExecutarRetencao');
+      document.getElementById('btnSimular').addEventListener('click', function () {
+        var dias = Number(document.getElementById('dias').value) || 365;
+        chamar('POST', '/api/admin/retencao', { simular: true, dias: dias }).then(function (r) {
+          if (!r.ok) { msg(avisoRet, r.c.erro || 'Falha na simulação.', true); btnExec.disabled = true; return; }
+          msg(avisoRet, r.c.total + ' ficha(s) seriam anonimizadas (sem atualização há mais de ' + r.c.dias + ' dias).', false);
+          btnExec.disabled = r.c.total === 0;
+        });
+      });
+      btnExec.addEventListener('click', function () {
+        var dias = Number(document.getElementById('dias').value) || 365;
+        if (!window.confirm('Anonimizar definitivamente as fichas simuladas? Esta ação não pode ser desfeita.')) return;
+        chamar('POST', '/api/admin/retencao', { simular: false, dias: dias }).then(function (r) {
+          msg(avisoRet, r.ok ? (r.c.fichasAnonimizadas + ' ficha(s) anonimizada(s); ' + r.c.contasExcluidas + ' conta(s) excluída(s).') : (r.c.erro || 'Falha ao executar.'), !r.ok);
+          btnExec.disabled = true;
+          carregar();
+        });
+      });
+
+      fetch('/api/auth/sessao', { headers: { Authorization: 'Bearer ' + token } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (c) {
+          if (!c || (c.usuario.tipo !== 'rh' && c.usuario.tipo !== 'admin')) { window.location.href = c ? '/ficha.html' : '/'; return; }
+          papel = c.usuario.tipo;
+          document.getElementById('blocoRetencao').hidden = papel !== 'admin';
+          carregar();
+        })
+        .catch(function () { window.location.href = '/'; });
+    })();
+  </script>
+</body>
+</html>

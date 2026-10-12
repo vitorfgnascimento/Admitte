@@ -12,8 +12,11 @@ const bcrypt = require('bcryptjs');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const { OAuth2Client } = require('google-auth-library');
-const supabase = require('./db/supabase');
+const repo = require('./db/repositorio');
 const { enviarEmail } = require('./lib/email');
+const mfa = require('./lib/mfa');
+const marca = require('./lib/marca');
+const QRCode = require('qrcode');
 
 const app = express();
 
@@ -67,8 +70,12 @@ app.use(express.json({ limit: '400kb' }));
 
 // A primeira tela do sistema é o login, não a ficha do candidato - só depois
 // de entrar (ou criar conta) é que o candidato é levado à Ficha de Admissão.
-// A página principal ("/") é a própria tela de login (arquivo login.html).
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+// A página principal ("/") é a própria tela de login (arquivo login.html),
+// servida por servirComMarca (mais abaixo).
+
+// MARCA (white-label): nome, logo e cores desta instalação (ver lib/marca.js).
+const MARCA = marca.carregar();
+app.get('/api/marca', (req, res) => res.status(200).json(MARCA.publico()));
 
 // Compatibilidade: o antigo /index.html (ficha do candidato) agora é /ficha.html.
 // Links já enviados (ex.: "?id=...") continuam funcionando.
@@ -82,7 +89,43 @@ app.get('/index.html', (req, res) => {
 // raiz do projeto, então 'public' relativo pode não resolver para a pasta
 // certa e todo pedido de página estática (login.html, rh.html etc.) falha
 // com "Cannot GET" mesmo com os arquivos presentes no projeto.
-app.use(express.static(path.join(__dirname, 'public')));
+// A bateria de testes da interface (testes.html) dispara chamadas reais à API e
+// cria dados: só é servida fora de produção, ou com EXPOR_TESTES=1.
+const EXPOR_TESTES = process.env.NODE_ENV !== 'production' || process.env.EXPOR_TESTES === '1';
+app.get('/testes.html', (req, res, next) => {
+  if (EXPOR_TESTES) return next();
+  return res.status(404).type('text/plain').send('Not found');
+});
+
+// Páginas HTML (e o script dos termos) passam pela marca da instalação antes de
+// sair; o resto (css, js, imagens) é servido direto. O resultado fica em cache
+// por arquivo e é refeito se o arquivo mudar.
+const DIRETORIO_PUBLICO = path.join(__dirname, 'public');
+const cachePaginas = new Map();
+function servirComMarca(req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  let caminho;
+  try { caminho = req.path === '/' ? '/login.html' : decodeURIComponent(req.path); } catch (e) { return next(); }
+  const ehHtml = caminho.endsWith('.html');
+  if (!ehHtml && caminho !== '/termos-privacidade.js') return next();
+
+  const arquivo = path.join(DIRETORIO_PUBLICO, caminho);
+  if (!arquivo.startsWith(DIRETORIO_PUBLICO + path.sep)) return next();
+  let info;
+  try { info = fs.statSync(arquivo); } catch (e) { return next(); }
+  if (!info.isFile()) return next();
+
+  let entrada = cachePaginas.get(arquivo);
+  if (!entrada || entrada.mtimeMs !== info.mtimeMs) {
+    entrada = { mtimeMs: info.mtimeMs, corpo: MARCA.aplicar(fs.readFileSync(arquivo, 'utf8'), { html: ehHtml }) };
+    cachePaginas.set(arquivo, entrada);
+  }
+  res.set('Cache-Control', 'no-cache');
+  return res.type(ehHtml ? 'text/html; charset=utf-8' : 'application/javascript; charset=utf-8').send(entrada.corpo);
+}
+app.use(servirComMarca);
+
+app.use(express.static(DIRETORIO_PUBLICO));
 
 // Diretório gravável dos arquivos de dados (JSON, PDFs, planilha Mestre).
 // Na Vercel (serverless) o diretório do projeto é somente leitura - só /tmp
@@ -282,6 +325,7 @@ function candidatoParaCamelCase(row, mensagens) {
     fichaPdf: row.ficha_pdf,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
+    anonimizadoEm: row.anonimizado_em || null,
     bancoTalentos: !!row.banco_talentos,
     bancoTalentosEm: row.banco_talentos_em || null,
     tags: Array.isArray(row.tags) ? row.tags : [],
@@ -351,22 +395,16 @@ function mensagemParaCamelCase(row) {
 // chat embutidas a partir de "mensagens_chat"). Mantém exatamente o mesmo
 // formato (camelCase, array) que o restante do arquivo sempre esperou.
 async function lerCandidatos() {
-  const { data: linhas, error: erroCandidatos } = await supabase.from('candidatos').select('*');
-  if (erroCandidatos) throw erroCandidatos;
-
-  const { data: mensagensLinhas, error: erroMensagens } = await supabase
-    .from('mensagens_chat')
-    .select('*')
-    .order('timestamp', { ascending: true });
-  if (erroMensagens) throw erroMensagens;
+  const linhas = await repo.listarCandidatos();
+  const mensagensLinhas = await repo.listarMensagens();
 
   const mensagensPorCandidato = {};
-  (mensagensLinhas || []).forEach((m) => {
+  mensagensLinhas.forEach((m) => {
     if (!mensagensPorCandidato[m.candidato_id]) mensagensPorCandidato[m.candidato_id] = [];
     mensagensPorCandidato[m.candidato_id].push(mensagemParaCamelCase(m));
   });
 
-  const candidatos = (linhas || []).map((row) => candidatoParaCamelCase(row, mensagensPorCandidato[row.id] || []));
+  const candidatos = linhas.map((row) => candidatoParaCamelCase(row, mensagensPorCandidato[row.id] || []));
   // Foto do estado lido (antes das migrações abaixo): salvarCandidatos grava só
   // as fichas que mudaram em relação a ela.
   candidatos.forEach((c) => marcarEstadoLido(c, candidatoParaSnakeCase));
@@ -406,10 +444,7 @@ async function salvarCandidatos(lista) {
   // os dados lidos antes desfazia, em silêncio, mudanças feitas em paralelo em
   // outras fichas.
   const linhas = linhasAlteradas(lista, candidatoParaSnakeCase);
-  if (linhas.length) {
-    const { error } = await supabase.from('candidatos').upsert(linhas, { onConflict: 'id' });
-    if (error) throw error;
-  }
+  if (linhas.length) await repo.gravarCandidatos(linhas);
   atualizarPlanilhaMestre();
 }
 
@@ -438,25 +473,60 @@ function gerarId() {
 // TRILHA DE AUDITORIA (LGPD) - registro imutável de eventos do RH
 // ---------------------------------------------------------------------------
 
-// Lê os eventos de auditoria já registrados. Se o arquivo ainda não existir, retorna lista vazia.
-function lerAuditoria() {
-  if (!fs.existsSync(ARQUIVO_AUDITORIA)) {
-    return [];
+// A trilha fica na tabela "auditoria" do Supabase, que é somente de acréscimo
+// (um gatilho no banco recusa UPDATE, DELETE e TRUNCATE - ver
+// supabase/migracao_auditoria.sql) e sobrevive a reinícios e a ambientes sem
+// disco persistente. O arquivo auditoria.json local só recebe o evento como
+// RESERVA, se a gravação no banco falhar (ex.: migração ainda não aplicada).
+
+// Reserva local: acrescenta o evento ao auditoria.json.
+function gravarAuditoriaLocal(evento) {
+  let eventos = [];
+  try {
+    const conteudo = fs.existsSync(ARQUIVO_AUDITORIA) ? fs.readFileSync(ARQUIVO_AUDITORIA, 'utf-8').trim() : '';
+    if (conteudo) eventos = JSON.parse(conteudo);
+  } catch (erro) {
+    eventos = [];
   }
-
-  const conteudo = fs.readFileSync(ARQUIVO_AUDITORIA, 'utf-8').trim();
-  if (!conteudo) {
-    return [];
-  }
-
-  return JSON.parse(conteudo);
-}
-
-// Acrescenta um novo evento à trilha de auditoria (append-only).
-function registrarEventoAuditoria(evento) {
-  const eventos = lerAuditoria();
   eventos.push(evento);
   fs.writeFileSync(ARQUIVO_AUDITORIA, JSON.stringify(eventos, null, 2), 'utf-8');
+}
+
+// Acrescenta um evento à trilha de auditoria. Devolve uma Promise que NUNCA
+// rejeita: chame com "await" nas rotas, para o registro terminar antes de a
+// resposta sair (em serverless a função pode ser congelada logo depois).
+async function registrarEventoAuditoria(evento) {
+  try {
+    await repo.inserirAuditoria({
+      id: String(evento.id || gerarId()),
+      tipo_evento: String(evento.tipoEvento || 'evento'),
+      usuario_id: evento.usuarioId || null,
+      candidato_id: evento.candidatoId || null,
+      ip: evento.ip || null,
+      ocorrido_em: evento.timestamp || new Date().toISOString(),
+      dados: evento
+    });
+  } catch (erro) {
+    console.error('Falha ao gravar auditoria no banco (usando reserva local):', erro.message);
+    try {
+      gravarAuditoriaLocal(evento);
+    } catch (erroLocal) {
+      console.error('Falha também na reserva local da auditoria:', erroLocal.message);
+    }
+  }
+}
+
+// Eventos de auditoria de uma ficha (do candidato e das ações sobre ela).
+async function lerAuditoriaDaFicha(candidato, limite = 200) {
+  const consultas = [repo.listarAuditoria({ candidatoId: candidato.id, limite })];
+  if (candidato.usuarioId) consultas.push(repo.listarAuditoria({ usuarioId: candidato.usuarioId, limite }));
+  const resultados = await Promise.all(consultas);
+  const vistos = new Map();
+  resultados.forEach((linhas) => linhas.forEach((linha) => vistos.set(linha.id, linha)));
+  return [...vistos.values()]
+    .sort((a, b) => String(b.ocorrido_em).localeCompare(String(a.ocorrido_em)))
+    .slice(0, limite)
+    .map((l) => ({ id: l.id, tipoEvento: l.tipo_evento, ocorridoEm: l.ocorrido_em, ip: l.ip, usuarioId: l.usuario_id, candidatoId: l.candidato_id, dados: l.dados }));
 }
 
 // ---------------------------------------------------------------------------
@@ -480,6 +550,11 @@ function usuarioParaCamelCase(row) {
     ativo: row.ativo,
     tokenAtivacao: row.token_ativacao,
     consentimentoCadastro: row.consentimento_cadastro,
+    // Verificação em duas etapas (ver migracao_mfa.sql). Ausente = desativada.
+    mfaAtivo: row.mfa_ativo === true,
+    mfaSegredo: row.mfa_segredo || null,
+    mfaCodigos: Array.isArray(row.mfa_codigos) ? row.mfa_codigos : [],
+    mfaUltimoPasso: Number(row.mfa_ultimo_passo) || 0,
     criadoEm: row.criado_em
   };
 }
@@ -501,29 +576,28 @@ function usuarioParaSnakeCase(u) {
     token_ativacao: u.tokenAtivacao || null,
     consentimento_cadastro: u.consentimentoCadastro || null,
     criado_em: u.criadoEm
+    // As colunas mfa_* NÃO entram aqui de propósito: só as rotas de MFA as
+    // gravam (por update pontual), e assim um upsert de usuário nunca
+    // sobrescreve o segredo nem falha em bancos ainda sem a migração.
   };
 }
 
 async function lerUsuarios() {
-  const { data, error } = await supabase.from('usuarios').select('*');
-  if (error) throw error;
-  const usuarios = (data || []).map(usuarioParaCamelCase);
+  const usuarios = (await repo.listarUsuarios()).map(usuarioParaCamelCase);
   usuarios.forEach((u) => marcarEstadoLido(u, usuarioParaSnakeCase));
   return usuarios;
 }
 
 // Busca um único usuário pelo id (usado a cada requisição autenticada).
 async function buscarUsuarioPorId(id) {
-  const { data, error } = await supabase.from('usuarios').select('*').eq('id', id).maybeSingle();
-  if (error) throw error;
-  return data ? usuarioParaCamelCase(data) : null;
+  const linha = await repo.buscarUsuario(id);
+  return linha ? usuarioParaCamelCase(linha) : null;
 }
 
 async function salvarUsuarios(lista) {
   const linhas = linhasAlteradas(lista, usuarioParaSnakeCase);
   if (!linhas.length) return;
-  const { error } = await supabase.from('usuarios').upsert(linhas, { onConflict: 'id' });
-  if (error) throw error;
+  await repo.gravarUsuarios(linhas);
 }
 
 // SESSÕES
@@ -535,26 +609,22 @@ const hashToken = (token) => crypto.createHash('sha256').update(String(token)).d
 const REGEX_HASH_TOKEN = /^[0-9a-f]{64}$/;
 
 async function inserirSessao(token, usuarioId, criadoEm, expiraEm) {
-  const { error } = await supabase.from('sessoes').insert({
+  await repo.inserirSessao({
     token: hashToken(token), usuario_id: usuarioId, criado_em: criadoEm, expira_em: expiraEm
   });
-  if (error) throw error;
 }
 
 async function removerSessaoPorToken(token) {
-  const { error } = await supabase.from('sessoes').delete().eq('token', hashToken(token));
-  if (error) throw error;
+  await repo.removerSessao(hashToken(token));
 }
 
 // Remove sessões antigas: expiradas e as gravadas no formato legado (token em
 // texto puro, anterior ao hash). Melhor esforço, roda no boot.
 async function limparSessoesAntigas() {
-  const { data, error } = await supabase.from('sessoes').select('token, expira_em');
-  if (error) throw error;
   const agora = Date.now();
-  const obsoletas = (data || []).filter((s) => !REGEX_HASH_TOKEN.test(String(s.token)) || Number(s.expira_em) <= agora);
+  const obsoletas = (await repo.listarSessoes()).filter((s) => !REGEX_HASH_TOKEN.test(String(s.token)) || Number(s.expira_em) <= agora);
   for (const s of obsoletas) {
-    await supabase.from('sessoes').delete().eq('token', s.token);
+    await repo.removerSessao(s.token);
   }
   return obsoletas.length;
 }
@@ -654,8 +724,7 @@ async function resolverUsuarioPorToken(req) {
   const token = cabecalho.startsWith('Bearer ') ? cabecalho.slice(7) : null;
   if (!token) return null;
 
-  const { data: sessao, error } = await supabase.from('sessoes').select('usuario_id, expira_em').eq('token', hashToken(token)).maybeSingle();
-  if (error) throw error;
+  const sessao = await repo.buscarSessao(hashToken(token));
   if (!sessao || Number(sessao.expira_em) <= Date.now()) return null;
 
   return buscarUsuarioPorId(sessao.usuario_id);
@@ -697,6 +766,11 @@ async function autenticarOpcional(req, res, next) {
 const PAPEIS_EQUIPE_RH = ['rh', 'admin'];
 const ehEquipeRh = (usuario) => !!usuario && PAPEIS_EQUIPE_RH.includes(usuario.tipo);
 
+// Verificação em duas etapas (TOTP). Opcional por padrão (a conta pública de
+// demonstração do RH não a usa); MFA_OBRIGATORIO=1 exige para rh, admin e master.
+const MFA_OBRIGATORIO = process.env.MFA_OBRIGATORIO === '1';
+const mfaPendente = (usuario) => MFA_OBRIGATORIO && usuario.tipo !== 'candidato' && !usuario.mfaAtivo;
+
 // Fábrica de middleware: exige sessão válida e um dos papéis informados.
 function exigirPapeis(papeis, mensagem) {
   return async (req, res, next) => {
@@ -704,6 +778,9 @@ function exigirPapeis(papeis, mensagem) {
       const usuario = await resolverUsuarioPorToken(req);
       if (!usuario) return res.status(401).json({ erro: 'Sessão inválida ou expirada. Faça login novamente.' });
       if (!papeis.includes(usuario.tipo)) return res.status(403).json({ erro: mensagem });
+      if (mfaPendente(usuario)) {
+        return res.status(403).json({ erro: 'Ative a verificação em duas etapas para continuar.', codigo: 'mfa_obrigatoria' });
+      }
       req.usuario = usuario;
       return next();
     } catch (erro) {
@@ -807,7 +884,7 @@ const REGEX_NOME_ARQUIVO = /^[\w.-]+\.pdf$/i;
 function segredoArquivos() {
   const dedicado = process.env.ARQUIVOS_SEGREDO || '';
   if (dedicado.length >= 16) return dedicado;
-  return 'arquivos-v1|' + (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || 'sem-chave');
+  return 'arquivos-v1|' + (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || process.env.DATABASE_URL || 'sem-chave');
 }
 
 function assinarArquivo(nome, expiraEm) {
@@ -1000,6 +1077,9 @@ const VERSAO_TERMOS_CADASTRO = 'v1.0';
 // Link/token de ativação só é devolvido na resposta fora de produção (NODE_ENV).
 const EXIBIR_LINK_ATIVACAO = process.env.NODE_ENV !== 'production';
 
+// Resposta única do cadastro, exista a conta ou não (não revela e-mails cadastrados).
+const MENSAGEM_CADASTRO_RECEBIDO = 'Cadastro recebido! Enviamos um e-mail para o endereço informado com as próximas instruções. Se não chegar em alguns minutos, verifique o spam.';
+
 app.post('/api/auth/registrar', limiteCadastros, async (req, res) => {
   try {
   const { nome, email, senha, confirmarSenha, dataNascimento, cpf, aceiteTermos } = req.body;
@@ -1024,13 +1104,20 @@ app.post('/api/auth/registrar', limiteCadastros, async (req, res) => {
     return res.status(400).json({ erro: 'É necessário aceitar os Termos de Uso e a Política de Privacidade para criar a conta.' });
   }
 
+  // O hash é calculado antes de consultar o e-mail: cadastro novo e repetido
+  // levam o mesmo tempo e a resposta é a mesma (não revela quem já tem conta).
+  const { salt, hash } = gerarHashSenha(String(senha));
   const usuarios = await lerUsuarios();
   if (usuarios.some((u) => u.email === emailAparado)) {
-    return res.status(400).json({ erro: 'Já existe uma conta com este e-mail.' });
+    await enviarEmail({
+      para: emailAparado,
+      assunto: `Você já tem cadastro - ${MARCA.nome}`,
+      texto: `Olá.\n\nAlguém tentou criar uma conta no ${MARCA.nome} com este e-mail, que já está cadastrado.\n\nSe foi você, entre normalmente ou use "Esqueci minha senha" na tela de login: ${urlBase(req)}/\n\nSe não foi você, ignore este e-mail. Nenhuma alteração foi feita na sua conta.`
+    });
+    return res.status(201).json({ mensagem: MENSAGEM_CADASTRO_RECEBIDO });
   }
 
   const agora = new Date().toISOString();
-  const { salt, hash } = gerarHashSenha(String(senha));
   const novoUsuario = {
     id: gerarId(),
     nome: nomeAparado,
@@ -1054,7 +1141,7 @@ app.post('/api/auth/registrar', limiteCadastros, async (req, res) => {
   usuarios.push(novoUsuario);
   await salvarUsuarios(usuarios);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'consentimento_cadastro',
     usuarioId: novoUsuario.id,
@@ -1067,7 +1154,7 @@ app.post('/api/auth/registrar', limiteCadastros, async (req, res) => {
   // Link de ativação por e-mail (SMTP configurado) ou simulado no log do servidor.
   await enviarEmail({
     para: emailAparado,
-    assunto: 'Confirme o seu cadastro - Onboarding Digital',
+    assunto: `Confirme o seu cadastro - ${MARCA.nome}`,
     texto: `Olá, ${nomeAparado}.\n\nPara ativar a sua conta, abra o link:\n${urlBase(req)}/login.html?ativacao=${novoUsuario.tokenAtivacao}\n\nSe você não fez este cadastro, ignore este e-mail.`
   });
 
@@ -1075,13 +1162,11 @@ app.post('/api/auth/registrar', limiteCadastros, async (req, res) => {
   // login. Em produção isso NUNCA pode ir na resposta - quem cadastrasse o
   // e-mail de outra pessoa ativaria a conta sem ter acesso à caixa de entrada.
   if (!EXIBIR_LINK_ATIVACAO) {
-    return res.status(201).json({
-      mensagem: 'Conta criada! A conta só poderá ser usada depois da confirmação do e-mail cadastrado.'
-    });
+    return res.status(201).json({ mensagem: MENSAGEM_CADASTRO_RECEBIDO });
   }
 
   return res.status(201).json({
-    mensagem: 'Conta criada! Confirme seu cadastro pelo link de ativação (verifique o console do servidor nesse ambiente de testes).',
+    mensagem: MENSAGEM_CADASTRO_RECEBIDO + ' (Ambiente de testes: o link de ativação está no console do servidor.)',
     linkAtivacao: `/login.html?ativacao=${novoUsuario.tokenAtivacao}`,
     tokenAtivacao: novoUsuario.tokenAtivacao
   });
@@ -1153,6 +1238,24 @@ function hashFalso() {
   return hashFalsoLogin;
 }
 
+// Material do segredo do servidor para o desafio do MFA e a cifra do segredo TOTP.
+// MFA_CHAVE (recomendado) deve ser estável: trocá-la exige reconfigurar o MFA.
+const materialMfa = () => 'mfa|' + (process.env.MFA_CHAVE || segredoArquivos());
+
+function respostaDesafioMfa(usuario) {
+  return {
+    mfaNecessario: true,
+    desafio: mfa.emitirDesafio(usuario.id, materialMfa()),
+    mensagem: 'Informe o código de 6 dígitos do aplicativo autenticador (ou um código de recuperação).'
+  };
+}
+
+function respostaLoginCompleto(usuario, token, mensagem) {
+  const corpo = { mensagem, token, usuario: dadosPublicosUsuario(usuario) };
+  if (mfaPendente(usuario)) corpo.mfaConfiguracaoObrigatoria = true;
+  return corpo;
+}
+
 app.post('/api/auth/login', async (req, res) => {
   try {
   const { email, senha } = req.body;
@@ -1184,11 +1287,15 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(403).json({ erro: 'Conta ainda não ativada. Verifique o link de confirmação enviado no cadastro (ou o console do servidor, neste ambiente de testes).' });
   }
 
+  // Segunda etapa: a senha estava certa, mas a sessão só sai com o código do
+  // aplicativo autenticador (ou um código de recuperação).
+  if (usuario.mfaAtivo) return res.status(200).json(respostaDesafioMfa(usuario));
+
   const token = await criarSessao(usuario.id);
 
   // Trilha de auditoria (LGPD): registra quem entrou, quando e de onde -
   // mesmo padrão já usado para o consentimento de cadastro e o chat.
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'login',
     usuarioId: usuario.id,
@@ -1198,7 +1305,7 @@ app.post('/api/auth/login', async (req, res) => {
     ip: req.ip
   });
 
-  return res.status(200).json({ mensagem: 'Login realizado com sucesso!', token, usuario: dadosPublicosUsuario(usuario) });
+  return res.status(200).json(respostaLoginCompleto(usuario, token, 'Login realizado com sucesso!'));
   } catch (erro) {
     console.error('Falha ao fazer login:', erro.message);
     return res.status(500).json({ erro: 'Falha ao fazer login.' });
@@ -1266,8 +1373,11 @@ app.post('/api/auth/google', async (req, res) => {
       if (alterado) await salvarUsuarios(usuarios);
     }
 
+    // Contas com MFA também passam pela segunda etapa quando entram pelo Google.
+    if (usuario.mfaAtivo) return res.status(200).json(respostaDesafioMfa(usuario));
+
     const token = await criarSessao(usuario.id);
-    return res.status(200).json({ mensagem: 'Login com Google realizado com sucesso!', token, usuario: dadosPublicosUsuario(usuario) });
+    return res.status(200).json(respostaLoginCompleto(usuario, token, 'Login com Google realizado com sucesso!'));
   } catch (erro) {
     console.error('Falha no login com Google:', erro.message);
     return res.status(500).json({ erro: 'Falha ao autenticar com o Google.' });
@@ -1293,7 +1403,7 @@ app.put('/api/auth/foto', autenticar, async (req, res) => {
     usuario.foto = foto;
     await salvarUsuarios(usuarios);
 
-    registrarEventoAuditoria({
+    await registrarEventoAuditoria({
       id: gerarId(),
       tipoEvento: 'foto_perfil_alterada',
       usuarioId: usuario.id,
@@ -1417,7 +1527,7 @@ app.post('/api/candidato', autenticarOpcional, limiteFichas, async (req, res) =>
   candidatos.push(novoCandidato);
   await salvarCandidatos(candidatos);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'consentimento_ficha_lgpd',
     candidatoId: novoCandidato.id,
@@ -1774,15 +1884,12 @@ function etiquetaParaSnakeCase(e) {
 }
 
 async function lerEtiquetas() {
-  const { data, error } = await supabase.from('etiquetas').select('*').order('criado_em', { ascending: true });
-  if (error) throw error;
-  return (data || []).map(etiquetaParaCamelCase);
+  return (await repo.listarEtiquetas()).map(etiquetaParaCamelCase);
 }
 
 async function salvarEtiquetas(lista) {
   if (!lista.length) return;
-  const { error } = await supabase.from('etiquetas').upsert(lista.map(etiquetaParaSnakeCase), { onConflict: 'id' });
-  if (error) throw error;
+  await repo.gravarEtiquetas(lista.map(etiquetaParaSnakeCase));
 }
 
 // Chave de comparação de nomes: sem acento, sem diferenciar maiúsculas.
@@ -1837,10 +1944,9 @@ function resolverTagsLegadas(textos, catalogo) {
 async function migrarTagsLegadasParaEtiquetas() {
   const catalogo = await lerEtiquetas();
   const idsConhecidos = new Set(catalogo.map((e) => e.id));
-  const { data: linhas, error } = await supabase.from('candidatos').select('id, tags');
-  if (error) throw error;
+  const linhas = await repo.listarTagsDasFichas();
 
-  const pendentes = (linhas || []).filter((l) => Array.isArray(l.tags) && l.tags.some((t) => typeof t === 'string' && !idsConhecidos.has(t)));
+  const pendentes = linhas.filter((l) => Array.isArray(l.tags) && l.tags.some((t) => typeof t === 'string' && !idsConhecidos.has(t)));
   if (!pendentes.length) return;
 
   const todasNovas = [];
@@ -1857,14 +1963,13 @@ async function migrarTagsLegadasParaEtiquetas() {
   // legadas continuam nas fichas e a próxima execução termina o trabalho.
   await salvarEtiquetas(todasNovas);
   for (const a of atualizacoes) {
-    const { error: erroUpdate } = await supabase.from('candidatos').update({ tags: a.tags }).eq('id', a.id);
-    if (erroUpdate) throw erroUpdate;
+    await repo.atualizarCandidato(a.id, { tags: a.tags });
   }
   console.log(`Migração de tags: ${todasNovas.length} etiqueta(s) criada(s), ${atualizacoes.length} ficha(s) atualizada(s).`);
 }
 
-function registrarAuditoriaEtiqueta(req, tipoEvento, extra) {
-  registrarEventoAuditoria({
+async function registrarAuditoriaEtiqueta(req, tipoEvento, extra) {
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento,
     ...extra,
@@ -1896,7 +2001,7 @@ app.post('/api/rh/etiquetas', exigirRh, async (req, res) => {
     const agora = new Date().toISOString();
     const etiqueta = { id: gerarId(), nome: campos.nome || '', cor: campos.cor, criadoEm: agora, atualizadoEm: agora };
     await salvarEtiquetas([etiqueta]);
-    registrarAuditoriaEtiqueta(req, 'etiqueta_criada', { etiquetaId: etiqueta.id, nome: etiqueta.nome, cor: etiqueta.cor });
+    await registrarAuditoriaEtiqueta(req, 'etiqueta_criada', { etiquetaId: etiqueta.id, nome: etiqueta.nome, cor: etiqueta.cor });
     return res.status(201).json({ mensagem: 'Etiqueta criada.', etiqueta });
   } catch (erro) {
     console.error('Falha ao criar etiqueta:', erro.message);
@@ -1917,7 +2022,7 @@ app.patch('/api/rh/etiquetas/:id', exigirRh, async (req, res) => {
     if (campos.cor !== undefined) etiqueta.cor = campos.cor;
     etiqueta.atualizadoEm = new Date().toISOString();
     await salvarEtiquetas([etiqueta]);
-    registrarAuditoriaEtiqueta(req, 'etiqueta_editada', { etiquetaId: etiqueta.id, nome: etiqueta.nome, cor: etiqueta.cor });
+    await registrarAuditoriaEtiqueta(req, 'etiqueta_editada', { etiquetaId: etiqueta.id, nome: etiqueta.nome, cor: etiqueta.cor });
     return res.status(200).json({ mensagem: 'Etiqueta atualizada.', etiqueta });
   } catch (erro) {
     console.error('Falha ao editar etiqueta:', erro.message);
@@ -1934,21 +2039,14 @@ app.delete('/api/rh/etiquetas/:id', exigirRh, async (req, res) => {
 
     // Retira o id das fichas antes de apagar do catálogo (updates pontuais, só
     // nas fichas afetadas, para não regravar a base inteira).
-    const { data: linhas, error } = await supabase.from('candidatos').select('id, tags');
-    if (error) throw error;
-    const afetadas = (linhas || []).filter((l) => Array.isArray(l.tags) && l.tags.includes(id));
+    const afetadas = (await repo.listarTagsDasFichas()).filter((l) => Array.isArray(l.tags) && l.tags.includes(id));
     const agora = new Date().toISOString();
     for (const linha of afetadas) {
-      const { error: erroUpdate } = await supabase
-        .from('candidatos')
-        .update({ tags: linha.tags.filter((t) => t !== id), atualizado_em: agora })
-        .eq('id', linha.id);
-      if (erroUpdate) throw erroUpdate;
+      await repo.atualizarCandidato(linha.id, { tags: linha.tags.filter((t) => t !== id), atualizado_em: agora });
     }
-    const { error: erroDelete } = await supabase.from('etiquetas').delete().eq('id', id);
-    if (erroDelete) throw erroDelete;
+    await repo.excluirEtiqueta(id);
 
-    registrarAuditoriaEtiqueta(req, 'etiqueta_excluida', { etiquetaId: id, nome: etiqueta.nome, cor: etiqueta.cor, fichasAfetadas: afetadas.length });
+    await registrarAuditoriaEtiqueta(req, 'etiqueta_excluida', { etiquetaId: id, nome: etiqueta.nome, cor: etiqueta.cor, fichasAfetadas: afetadas.length });
     return res.status(200).json({ mensagem: 'Etiqueta excluída.', fichasAfetadas: afetadas.length });
   } catch (erro) {
     console.error('Falha ao excluir etiqueta:', erro.message);
@@ -1987,7 +2085,7 @@ app.patch('/api/rh/fichas/:id/etiquetas', exigirRh, async (req, res) => {
     candidato.tags = resultado.ids;
     candidato.atualizadoEm = new Date().toISOString();
     await salvarCandidatos(candidatos);
-    registrarAuditoriaEtiqueta(req, 'etiquetas_ficha_alteradas', { candidatoId: id, etiquetas: resultado.ids });
+    await registrarAuditoriaEtiqueta(req, 'etiquetas_ficha_alteradas', { candidatoId: id, etiquetas: resultado.ids });
     return res.status(200).json({ mensagem: 'Etiquetas da ficha atualizadas.', candidato });
   } catch (erro) {
     console.error('Falha ao anexar etiquetas à ficha:', erro.message);
@@ -2051,7 +2149,7 @@ app.patch('/api/rh/fichas/:id/banco-talentos', exigirRh, async (req, res) => {
     candidato.atualizadoEm = agora;
     await salvarCandidatos(candidatos);
 
-    registrarEventoAuditoria({
+    await registrarEventoAuditoria({
       id: gerarId(),
       tipoEvento: 'banco_talentos_mover',
       candidatoId: id,
@@ -2083,7 +2181,7 @@ app.patch('/api/rh/fichas/:id/reativar', exigirRh, async (req, res) => {
     candidato.atualizadoEm = agora;
     await salvarCandidatos(candidatos);
 
-    registrarEventoAuditoria({
+    await registrarEventoAuditoria({
       id: gerarId(),
       tipoEvento: 'banco_talentos_reativar',
       candidatoId: id,
@@ -2147,9 +2245,7 @@ function configuracoesDeLinha(row) {
 
 async function lerConfiguracoes() {
   try {
-    const { data, error } = await supabase.from('configuracoes').select('*').eq('id', 'geral').maybeSingle();
-    if (error) throw error;
-    return configuracoesDeLinha(data);
+    return configuracoesDeLinha(await repo.buscarConfiguracoes('geral'));
   } catch (erro) {
     console.error('Falha ao ler configurações (usando padrões):', erro.message);
     return configuracoesPadrao();
@@ -2157,7 +2253,7 @@ async function lerConfiguracoes() {
 }
 
 async function salvarConfiguracoes(config) {
-  const { error } = await supabase.from('configuracoes').upsert({
+  await repo.gravarConfiguracoes({
     id: 'geral',
     mensagem_boas_vindas: config.mensagemBoasVindas,
     documentos_obrigatorios: config.documentosObrigatorios,
@@ -2166,8 +2262,7 @@ async function salvarConfiguracoes(config) {
     mensagem_contratacao_concluida: config.mensagemContratacaoConcluida,
     foto_rh: config.fotoRh || null,
     atualizado_em: new Date().toISOString()
-  }, { onConflict: 'id' });
-  if (error) throw error;
+  });
 }
 
 app.get('/api/rh/configuracoes', exigirRh, async (req, res) => {
@@ -2236,7 +2331,7 @@ app.put('/api/rh/configuracoes', exigirRh, async (req, res) => {
     };
     await salvarConfiguracoes(config);
 
-    registrarEventoAuditoria({
+    await registrarEventoAuditoria({
       id: gerarId(),
       tipoEvento: 'configuracoes_alteradas',
       usuarioId: req.usuario.id,
@@ -2263,7 +2358,7 @@ app.put('/api/rh/configuracoes/foto', exigirRh, async (req, res) => {
     config.fotoRh = foto;
     await salvarConfiguracoes(config);
 
-    registrarEventoAuditoria({
+    await registrarEventoAuditoria({
       id: gerarId(),
       tipoEvento: 'foto_perfil_alterada',
       usuarioId: req.usuario.id,
@@ -2325,7 +2420,7 @@ app.patch('/api/rh/fichas/:id/status', exigirRh, async (req, res) => {
     timestamp: agora,
     ip: req.ip
   };
-  registrarEventoAuditoria(evento);
+  await registrarEventoAuditoria(evento);
 
   console.log(`--- [Auditoria] Status alterado pelo RH --- ID: ${id} | ${statusAnterior} -> ${status} | IP: ${req.ip}`);
 
@@ -2389,30 +2484,14 @@ app.get('/api/candidato/:id/mensagens', autenticar, async (req, res) => {
     // Consulta direta em mensagens_chat (tabela própria, normalizada) - mais
     // eficiente do que carregar a lista inteira de candidatos só para filtrar
     // o array embutido de mensagens de um único candidato.
-    const { data: candidatoRow, error: erroCandidato } = await supabase
-      .from('candidatos')
-      .select('id, usuario_id, email')
-      .eq('id', id)
-      .maybeSingle();
-    if (erroCandidato) throw erroCandidato;
+    const candidatoRow = await repo.buscarCandidato(id);
     if (!candidatoRow) return res.status(404).json({ erro: 'Candidato não encontrado.' });
     if (!usuarioPodeVerFicha(req.usuario, { usuarioId: candidatoRow.usuario_id, email: candidatoRow.email })) {
       return res.status(403).json({ erro: ERRO_FICHA_DE_OUTRA_CONTA });
     }
 
-    let consulta = supabase
-      .from('mensagens_chat')
-      .select('*')
-      .eq('candidato_id', id)
-      .order('timestamp', { ascending: true });
-    if (apos) {
-      consulta = consulta.gt('timestamp', new Date(apos).toISOString());
-    }
-
-    const { data: linhas, error: erroMensagens } = await consulta;
-    if (erroMensagens) throw erroMensagens;
-
-    const mensagens = (linhas || []).map(mensagemParaCamelCase);
+    const linhas = await repo.listarMensagensDaFicha(id, apos ? new Date(apos).toISOString() : null);
+    const mensagens = linhas.map(mensagemParaCamelCase);
     return res.status(200).json({ mensagens });
   } catch (erro) {
     console.error('Falha ao buscar mensagens:', erro.message);
@@ -2449,12 +2528,7 @@ app.post('/api/candidato/:id/mensagens', autenticar, limiteMensagens, async (req
 
     // Busca só a linha do candidato (não a lista inteira) - o suficiente para
     // validar existência e a regra de bloqueio por REPROVADO.
-    const { data: candidatoRow, error: erroCandidato } = await supabase
-      .from('candidatos')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-    if (erroCandidato) throw erroCandidato;
+    const candidatoRow = await repo.buscarCandidato(id);
 
     if (!candidatoRow) {
       return res.status(404).json({ erro: 'Candidato não encontrado.' });
@@ -2490,7 +2564,7 @@ app.post('/api/candidato/:id/mensagens', autenticar, limiteMensagens, async (req
     // Insere a mensagem diretamente na tabela própria (mensagens_chat), sem
     // passar pelo upsert da ficha inteira - evita sobrescrever concorrentemente
     // o restante dos dados do candidato só para acrescentar uma mensagem.
-    const { error: erroInsercao } = await supabase.from('mensagens_chat').insert({
+    await repo.inserirMensagem({
       id: novaMensagem.id,
       candidato_id: id,
       autor: novaMensagem.autor,
@@ -2499,18 +2573,13 @@ app.post('/api/candidato/:id/mensagens', autenticar, limiteMensagens, async (req
       timestamp: novaMensagem.timestamp,
       ip: novaMensagem.ip
     });
-    if (erroInsercao) throw erroInsercao;
 
     // Só o carimbo de atualização da ficha muda - um update pontual, não um
     // upsert da linha inteira.
-    const { error: erroUpdate } = await supabase
-      .from('candidatos')
-      .update({ atualizado_em: agora })
-      .eq('id', id);
-    if (erroUpdate) throw erroUpdate;
+    await repo.atualizarCandidato(id, { atualizado_em: agora });
 
     // Trilha de auditoria (LGPD): quem escreveu, quando e de onde.
-    registrarEventoAuditoria({
+    await registrarEventoAuditoria({
       id: gerarId(),
       tipoEvento: 'mensagem_chat',
       candidatoId: id,
@@ -2521,15 +2590,10 @@ app.post('/api/candidato/:id/mensagens', autenticar, limiteMensagens, async (req
 
     // Devolve a ficha completa (mesmo formato de sempre) para o frontend
     // atualizar seu cache local e a lista de mensagens em tela.
-    const { data: mensagensLinhas, error: erroMensagens } = await supabase
-      .from('mensagens_chat')
-      .select('*')
-      .eq('candidato_id', id)
-      .order('timestamp', { ascending: true });
-    if (erroMensagens) throw erroMensagens;
+    const mensagensLinhas = await repo.listarMensagensDaFicha(id);
 
     candidatoRow.atualizado_em = agora;
-    const candidato = candidatoParaCamelCase(candidatoRow, (mensagensLinhas || []).map(mensagemParaCamelCase));
+    const candidato = candidatoParaCamelCase(candidatoRow, mensagensLinhas.map(mensagemParaCamelCase));
 
     return res.status(201).json({ mensagem: 'Mensagem enviada.', candidato });
   } catch (erro) {
@@ -2583,7 +2647,7 @@ app.patch('/api/rh/fichas/:id/documento/:tipo/pendencia', exigirRh, async (req, 
   candidato.atualizadoEm = agora;
   await salvarCandidatos(candidatos);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'pendencia_documento',
     candidatoId: id,
@@ -2645,7 +2709,7 @@ app.patch('/api/rh/fichas/:id/documento/:tipo/aceitar', exigirRh, async (req, re
   candidato.atualizadoEm = agora;
   await salvarCandidatos(candidatos);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'documento_aceito',
     candidatoId: id,
@@ -2684,7 +2748,7 @@ app.patch('/api/rh/fichas/:id/documento/:tipo/visualizado', exigirRh, async (req
 
   const agora = new Date().toISOString();
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'documento_visualizado',
     candidatoId: id,
@@ -2736,7 +2800,7 @@ app.patch('/api/rh/fichas/:id/decisao', exigirRh, async (req, res) => {
   candidato.atualizadoEm = agora;
   await salvarCandidatos(candidatos);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'decisao_final',
     candidatoId: id,
@@ -3067,7 +3131,7 @@ app.get('/api/relatorio/dashboard-pdf', exigirRh, async (req, res) => {
     doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(18)
       .text('Dashboard de Admissões', doc.page.margins.left + 15, doc.page.margins.top + 10);
     doc.font('Helvetica').fontSize(9)
-      .text('Sistema de Onboarding Digital & Conformidade Trabalhista', doc.page.margins.left + 15, doc.page.margins.top + 34);
+      .text(`Sistema ${MARCA.nome} & Conformidade Trabalhista`, doc.page.margins.left + 15, doc.page.margins.top + 34);
     doc.font('Helvetica-Bold').fontSize(9)
       .text(`Gerado em: ${formatarDataBr(new Date().toISOString())}`, doc.page.margins.left, doc.page.margins.top + 10, { width: larguraUtil - 15, align: 'right' });
     doc.font('Helvetica').fontSize(9)
@@ -3411,6 +3475,19 @@ function situacaoDocumentoPdf(candidato, tipo, documento) {
   return 'Pendente';
 }
 
+// Trilha de auditoria (LGPD) de uma ficha: eventos do candidato e do RH sobre ela.
+app.get('/api/rh/fichas/:id/auditoria', exigirRh, async (req, res) => {
+  try {
+    const candidatos = await lerCandidatos();
+    const candidato = candidatos.find((c) => c.id === req.params.id);
+    if (!candidato) return res.status(404).json({ erro: 'Candidato não encontrado.' });
+    return res.status(200).json({ eventos: await lerAuditoriaDaFicha(candidato) });
+  } catch (erro) {
+    console.error('Falha ao consultar a auditoria:', erro.message);
+    return res.status(500).json({ erro: 'Falha ao consultar a trilha de auditoria.' });
+  }
+});
+
 app.get('/api/rh/fichas/:id/pdf', exigirRh, async (req, res) => {
   const { id } = req.params;
   let candidatos;
@@ -3553,7 +3630,7 @@ endobj
 << /Length 220 >>
 stream
 BT /F1 14 Tf 50 780 Td (MINUTA - ${tituloEscapado}) Tj ET
-BT /F1 10 Tf 50 750 Td (Documento de exemplo - Onboarding Digital) Tj ET
+BT /F1 10 Tf 50 750 Td (Documento de exemplo - ${marca.nomeParaPdf(MARCA.nome)}) Tj ET
 BT /F1 10 Tf 50 730 Td (Substitua por um modelo real fornecido pelo Juridico/RH.) Tj ET
 endstream
 endobj
@@ -3601,7 +3678,7 @@ function gerarDocumentoContratoAssinado(candidato, tipo, titulo, aceite) {
   doc.fontSize(16).font('Helvetica-Bold').fillColor('#1a252f').text(titulo);
   doc.moveDown(1);
   doc.fontSize(10).font('Helvetica').fillColor('#333333').text(
-    'Documento de exemplo - Onboarding Digital. Em um cenário real, este seria o ' +
+    `Documento de exemplo - ${MARCA.nome}. Em um cenário real, este seria o ` +
     'texto integral do documento fornecido pelo time Jurídico/RH.'
   );
   doc.moveDown(2);
@@ -3680,7 +3757,7 @@ app.post('/api/candidato/:id/contrato/:tipo/aceite', autenticar, async (req, res
   candidato.atualizadoEm = agora;
   await salvarCandidatos(candidatos);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'aceite_documento_contrato',
     candidatoId: id,
@@ -3754,7 +3831,7 @@ app.post('/api/candidato/:id/contrato/concluir', autenticar, async (req, res) =>
   candidato.atualizadoEm = agora;
   await salvarCandidatos(candidatos);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'assinatura_digital_concluida',
     candidatoId: id,
@@ -3797,7 +3874,7 @@ app.patch('/api/rh/fichas/:id/contrato/validar', exigirRh, async (req, res) => {
   candidato.atualizadoEm = agora;
   await salvarCandidatos(candidatos);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(),
     tipoEvento: 'contratacao_concluida',
     candidatoId: id,
@@ -3840,11 +3917,11 @@ function urlBase(req) {
 
 // Cria um pedido de redefinição para o usuário e invalida os anteriores.
 async function criarPedidoRecuperacao(usuario, finalidade) {
-  await supabase.from('recuperacoes_senha').update({ usado: true }).eq('usuario_id', usuario.id).eq('usado', false);
+  await repo.invalidarRecuperacoesDoUsuario(usuario.id);
   const token = crypto.randomBytes(32).toString('hex');
   const senhaTemporaria = gerarSenhaTemporaria();
   const agora = Date.now();
-  const { error } = await supabase.from('recuperacoes_senha').insert({
+  await repo.inserirRecuperacao({
     id: gerarId(),
     usuario_id: usuario.id,
     token_hash: hashToken(token),
@@ -3855,7 +3932,6 @@ async function criarPedidoRecuperacao(usuario, finalidade) {
     criado_em: agora,
     expira_em: agora + VALIDADE_RECUPERACAO_MS
   });
-  if (error) throw error;
   return { token, senhaTemporaria };
 }
 
@@ -3865,7 +3941,7 @@ async function enviarPedidoRecuperacao(req, usuario, pedido, finalidade) {
   const link = `${urlBase(req)}/recuperar-senha.html?token=${pedido.token}`;
   const minutos = Math.round(VALIDADE_RECUPERACAO_MS / 60000);
   const abertura = finalidade === 'definicao'
-    ? `Olá, ${usuario.nome}. Foi criado um acesso para você ao Onboarding Digital. Para definir a sua senha:`
+    ? `Olá, ${usuario.nome}. Foi criado um acesso para você ao ${MARCA.nome}. Para definir a sua senha:`
     : `Olá, ${usuario.nome}. Recebemos um pedido para redefinir a sua senha. Para continuar:`;
   const texto = [
     abertura, '',
@@ -3876,7 +3952,7 @@ async function enviarPedidoRecuperacao(req, usuario, pedido, finalidade) {
   ].join('\n');
   const resultado = await enviarEmail({
     para: usuario.email,
-    assunto: finalidade === 'definicao' ? 'Defina a sua senha - Onboarding Digital' : 'Redefinição de senha - Onboarding Digital',
+    assunto: finalidade === 'definicao' ? `Defina a sua senha - ${MARCA.nome}` : `Redefinição de senha - ${MARCA.nome}`,
     texto
   });
   const teste = EXIBIR_LINK_ATIVACAO
@@ -3908,8 +3984,7 @@ app.post('/api/auth/recuperar-senha', limiteRecuperacaoIp, limiteRecuperacao, as
       return res.status(400).json({ erro: 'Informe um e-mail válido.' });
     }
 
-    const { data: linha, error } = await supabase.from('usuarios').select('*').eq('email', email).maybeSingle();
-    if (error) throw error;
+    const linha = await repo.buscarUsuarioPorEmail(email);
     const usuario = linha ? usuarioParaCamelCase(linha) : null;
 
     // Resposta idêntica exista a conta ou não (não revela quais e-mails têm cadastro).
@@ -3918,7 +3993,7 @@ app.post('/api/auth/recuperar-senha', limiteRecuperacaoIp, limiteRecuperacao, as
     if (usuario && usuario.ativo !== false && usuario.tipo !== 'master') {
       const pedido = await criarPedidoRecuperacao(usuario, 'recuperacao');
       extra = await enviarPedidoRecuperacao(req, usuario, pedido, 'recuperacao');
-      registrarEventoAuditoria({
+      await registrarEventoAuditoria({
         id: gerarId(), tipoEvento: 'recuperacao_senha_solicitada', usuarioId: usuario.id,
         timestamp: new Date().toISOString(), ip: req.ip
       });
@@ -3938,14 +4013,13 @@ app.post('/api/auth/redefinir-senha', limiteRedefinicao, async (req, res) => {
     const invalido = () => res.status(400).json({ erro: 'Link inválido ou expirado, ou senha temporária incorreta.' });
     if (!token || !senhaTemporaria) return invalido();
 
-    const { data: pedido, error } = await supabase.from('recuperacoes_senha').select('*').eq('token_hash', hashToken(token)).maybeSingle();
-    if (error) throw error;
+    const pedido = await repo.buscarRecuperacaoPorHash(hashToken(token));
     if (!pedido || pedido.usado || Number(pedido.expira_em) <= Date.now() || pedido.tentativas >= MAX_TENTATIVAS_SENHA_TEMPORARIA) {
       return invalido();
     }
 
     if (!bcrypt.compareSync(String(senhaTemporaria), pedido.senha_temp_hash)) {
-      await supabase.from('recuperacoes_senha').update({ tentativas: pedido.tentativas + 1 }).eq('id', pedido.id);
+      await repo.atualizarRecuperacao(pedido.id, { tentativas: pedido.tentativas + 1 });
       return invalido();
     }
 
@@ -3957,14 +4031,12 @@ app.post('/api/auth/redefinir-senha', limiteRedefinicao, async (req, res) => {
     if (!usuario || usuario.ativo === false || usuario.tipo === 'master') return invalido();
 
     const { salt, hash } = gerarHashSenha(String(novaSenha));
-    const { error: erroUsuario } = await supabase.from('usuarios')
-      .update({ senha_salt: salt, senha_hash: hash }).eq('id', usuario.id);
-    if (erroUsuario) throw erroUsuario;
-    await supabase.from('recuperacoes_senha').update({ usado: true }).eq('id', pedido.id);
+    await repo.atualizarUsuario(usuario.id, { senha_salt: salt, senha_hash: hash });
+    await repo.atualizarRecuperacao(pedido.id, { usado: true });
     // Troca de senha encerra todas as sessões abertas dessa conta.
-    await supabase.from('sessoes').delete().eq('usuario_id', usuario.id);
+    await repo.removerSessoesDoUsuario(usuario.id);
 
-    registrarEventoAuditoria({
+    await registrarEventoAuditoria({
       id: gerarId(), tipoEvento: 'senha_redefinida', usuarioId: usuario.id, finalidade: pedido.finalidade,
       timestamp: new Date().toISOString(), ip: req.ip
     });
@@ -3979,6 +4051,229 @@ app.post('/api/auth/redefinir-senha', limiteRedefinicao, async (req, res) => {
 // GESTÃO DE CONTAS: MASTER cria administradores (clientes); o ADMIN cria e
 // gerencia os operadores do RH da própria empresa.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// DIREITOS DO TITULAR (LGPD, art. 18): exportar os próprios dados, pedir
+// exclusão (o RH/admin executa ou recusa com motivo) e política de retenção.
+//
+// "Excluir" aqui é ANONIMIZAR a ficha: os arquivos PDF e as mensagens são
+// apagados, os dados pessoais da ficha são removidos e a conta de acesso é
+// excluída; fica só o esqueleto sem identificação (id, status, datas) para
+// estatística. Fichas de CONTRATADOS não são excluídas: a empresa tem
+// obrigação legal de guarda (art. 16, I). A trilha de auditoria é mantida,
+// porque é somente de acréscimo e cumpre obrigação legal.
+// ---------------------------------------------------------------------------
+// Envolve um handler: qualquer falha vira um 500 genérico (sem vazar detalhes).
+const comTratamento = (fn) => async (req, res) => {
+  try {
+    return await fn(req, res);
+  } catch (erro) {
+    console.error('Falha na operação:', erro.message);
+    return res.status(500).json({ erro: 'Não foi possível concluir a operação agora.' });
+  }
+};
+
+const TEXTO_FICHA_ANONIMIZADA = 'Dados removidos a pedido do titular';
+const RETENCAO_DIAS = limiteDoAmbiente('RETENCAO_DIAS', 365);
+
+function motivoRetencaoLegal(candidato) {
+  if (candidato.status === 'CONTRATACAO_CONCLUIDA') {
+    return 'Candidato contratado: a empresa deve guardar os documentos admissionais por obrigação legal (LGPD, art. 16, I).';
+  }
+  return null;
+}
+
+// Apaga arquivos, mensagens e dados pessoais de uma ficha. Não exclui a conta.
+async function anonimizarFicha(candidato, motivo, executorId) {
+  const arquivos = new Set([`ficha-${candidato.id}.pdf`]);
+  Object.values(candidato.documentos || {}).forEach((d) => { if (d && d.arquivo) arquivos.add(nomeDoArquivo(d.arquivo)); });
+  Object.values((candidato.contrato && candidato.contrato.documentos) || {}).forEach((d) => { if (d && d.arquivoAssinado) arquivos.add(nomeDoArquivo(d.arquivoAssinado)); });
+  for (const nome of arquivos) {
+    try { await armazenamento.remover(nome); } catch (erro) { console.error('Falha ao remover arquivo na anonimização:', erro.message); }
+  }
+
+  await repo.excluirMensagensDaFicha(candidato.id);
+
+  const documentosVazios = {};
+  TIPOS_DOCUMENTO.forEach((tipo) => { documentosVazios[tipo] = { arquivo: null, status: 'VERMELHO', atualizadoEm: null, pendencia: null }; });
+  const consentimento = candidato.consentimentoFichaLGPD
+    ? { aceito: candidato.consentimentoFichaLGPD.aceito, dataHora: candidato.consentimentoFichaLGPD.dataHora, versaoTermo: candidato.consentimentoFichaLGPD.versaoTermo, finalidade: candidato.consentimentoFichaLGPD.finalidade }
+    : null;
+  const agora = new Date().toISOString();
+  await repo.atualizarCandidato(candidato.id, {
+    nome_completo: TEXTO_FICHA_ANONIMIZADA, cpf: null, email: null, whatsapp: null, genero: null, cep: null,
+    logradouro: null, bairro: null, numero: null, complemento: null, data_nascimento: null,
+    documentos: documentosVazios, contrato: criarContratoInicial(), integracao_ponto: criarIntegracaoPontoInicial(),
+    ficha_pdf: null, usuario_id: null, tags: [], banco_talentos: false,
+    consentimento_ficha_lgpd: consentimento, consentimento_contrato_lgpd: null,
+    anonimizado_em: agora, atualizado_em: agora
+  });
+
+  await registrarEventoAuditoria({
+    id: gerarId(), tipoEvento: 'ficha_anonimizada', candidatoId: candidato.id, motivo,
+    executadoPor: executorId || null, timestamp: agora
+  });
+}
+
+// Exclui a conta de acesso (sessões e pedidos de senha caem em cascata).
+async function excluirConta(usuarioId, motivo, executorId) {
+  await repo.excluirUsuario(usuarioId);
+  await registrarEventoAuditoria({
+    id: gerarId(), tipoEvento: 'conta_excluida', usuarioId, motivo,
+    executadoPor: executorId || null, timestamp: new Date().toISOString()
+  });
+}
+
+// Todos os dados que o sistema guarda sobre o titular (acesso e portabilidade).
+async function montarExportacaoTitular(usuario) {
+  const candidatos = (await lerCandidatos()).filter((c) => usuarioEhDonoDaFicha(usuario, c));
+  const solic = await repo.listarSolicitacoesDoUsuario(usuario.id);
+  const eventos = [];
+  for (const c of candidatos) eventos.push(...await lerAuditoriaDaFicha(c, 500));
+  return {
+    geradoEm: new Date().toISOString(),
+    titular: {
+      nome: usuario.nome, email: usuario.email, cpf: usuario.cpf || null, dataNascimento: usuario.dataNascimento || null,
+      papel: usuario.tipo, contaCriadaEm: usuario.criadoEm, consentimentoCadastro: usuario.consentimentoCadastro || null
+    },
+    fichas: candidatos.map((c) => ({
+      id: c.id, status: c.status, criadoEm: c.criadoEm, atualizadoEm: c.atualizadoEm,
+      dadosPessoais: {
+        nomeCompleto: c.nomeCompleto, dataNascimento: c.dataNascimento, cpf: c.cpf, genero: c.genero, email: c.email,
+        whatsapp: c.whatsapp, cep: c.cep, logradouro: c.logradouro, bairro: c.bairro, numero: c.numero, complemento: c.complemento
+      },
+      documentos: Object.entries(c.documentos || {}).map(([tipo, d]) => ({ tipo, enviado: !!(d && d.arquivo), status: d && d.status })),
+      decisaoFinal: c.decisaoFinal || null,
+      consentimentoFicha: c.consentimentoFichaLGPD || null,
+      consentimentoContrato: c.consentimentoContratoLGPD || null,
+      mensagens: (c.mensagens || []).map((m) => ({ autor: m.autor, texto: m.texto, enviadaEm: m.timestamp }))
+    })),
+    solicitacoes: solic.map((s) => ({ id: s.id, tipo: s.tipo, status: s.status, criadoEm: s.criado_em, resolvidoEm: s.resolvido_em, motivoRecusa: s.motivo_recusa })),
+    registrosDeAcesso: eventos.map((e) => ({ evento: e.tipoEvento, ocorridoEm: e.ocorridoEm, ip: e.ip }))
+  };
+}
+
+const limiteTitular = criarLimitador({
+  janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_TITULAR_HORA', 10), chave: porUsuarioOuIp,
+  mensagem: 'Muitos pedidos em pouco tempo. Tente novamente mais tarde.'
+});
+
+// --- Titular (conta logada) ---
+app.get('/api/meus-dados/exportar', autenticar, limiteTitular, comTratamento(async (req, res) => {
+  const dados = await montarExportacaoTitular(req.usuario);
+  await registrarEventoAuditoria({ id: gerarId(), tipoEvento: 'dados_exportados', usuarioId: req.usuario.id, timestamp: new Date().toISOString(), ip: req.ip });
+  res.set('Content-Disposition', 'attachment; filename="meus-dados.json"');
+  return res.status(200).json(dados);
+}));
+
+app.get('/api/meus-dados/solicitacoes', autenticar, comTratamento(async (req, res) => {
+  const data = await repo.listarSolicitacoesDoUsuario(req.usuario.id);
+  return res.status(200).json(data.map((s) => ({ id: s.id, tipo: s.tipo, status: s.status, criadoEm: s.criado_em, resolvidoEm: s.resolvido_em, motivoRecusa: s.motivo_recusa })));
+}));
+
+app.post('/api/meus-dados/solicitar-exclusao', autenticar, limiteTitular, comTratamento(async (req, res) => {
+  if (req.usuario.tipo !== 'candidato') return res.status(403).json({ erro: 'Este pedido é para contas de candidato.' });
+  if ((req.body || {}).confirmar !== true) return res.status(400).json({ erro: 'Confirme o pedido de exclusão.' });
+
+  const existentes = await repo.listarSolicitacoesDoUsuario(req.usuario.id, 'pendente');
+  if (existentes.length) {
+    return res.status(200).json({ mensagem: 'Você já tem um pedido de exclusão em análise.', solicitacaoId: existentes[0].id, jaExistia: true });
+  }
+
+  const fichas = (await lerCandidatos()).filter((c) => usuarioEhDonoDaFicha(req.usuario, c));
+  const bloqueio = fichas.map(motivoRetencaoLegal).find(Boolean) || null;
+  const nova = {
+    id: gerarId(), usuario_id: req.usuario.id, candidato_id: fichas[0] ? fichas[0].id : null,
+    tipo: 'exclusao', status: 'pendente', criado_em: new Date().toISOString()
+  };
+  await repo.inserirSolicitacao(nova);
+  await registrarEventoAuditoria({ id: gerarId(), tipoEvento: 'exclusao_solicitada', usuarioId: req.usuario.id, candidatoId: nova.candidato_id, timestamp: nova.criado_em, ip: req.ip });
+  return res.status(201).json({
+    mensagem: 'Pedido de exclusão registrado. O RH da empresa vai analisá-lo.' + (bloqueio ? ' Atenção: ' + bloqueio : ''),
+    solicitacaoId: nova.id, retencaoLegal: !!bloqueio
+  });
+}));
+
+// --- RH / admin: analisar e executar pedidos ---
+app.get('/api/rh/solicitacoes-titular', exigirRh, comTratamento(async (req, res) => {
+  const data = await repo.listarSolicitacoes();
+  const fichas = new Map((await lerCandidatos()).map((c) => [c.id, c]));
+  const lista = data.sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em))).map((s) => {
+    const ficha = s.candidato_id ? fichas.get(s.candidato_id) : null;
+    return {
+      id: s.id, status: s.status, criadoEm: s.criado_em, resolvidoEm: s.resolvido_em, motivoRecusa: s.motivo_recusa,
+      candidatoId: s.candidato_id, nome: ficha ? ficha.nomeCompleto : null, statusFicha: ficha ? ficha.status : null,
+      retencaoLegal: ficha ? motivoRetencaoLegal(ficha) : null
+    };
+  });
+  return res.status(200).json(lista);
+}));
+
+async function carregarSolicitacaoPendente(id) {
+  const data = await repo.buscarSolicitacao(id);
+  return data && data.status === 'pendente' ? data : null;
+}
+
+app.post('/api/rh/solicitacoes-titular/:id/executar', exigirRh, comTratamento(async (req, res) => {
+  const s = await carregarSolicitacaoPendente(req.params.id);
+  if (!s) return res.status(404).json({ erro: 'Pedido não encontrado ou já resolvido.' });
+
+  const todas = await lerCandidatos();
+  const fichas = todas.filter((c) => c.usuarioId === s.usuario_id || c.id === s.candidato_id);
+  const bloqueio = fichas.map(motivoRetencaoLegal).find(Boolean);
+  if (bloqueio) return res.status(409).json({ erro: bloqueio + ' Recuse o pedido informando esse motivo.' });
+
+  for (const ficha of fichas) await anonimizarFicha(ficha, 'solicitacao_do_titular', req.usuario.id);
+  await excluirConta(s.usuario_id, 'solicitacao_do_titular', req.usuario.id);
+  await repo.atualizarSolicitacao(s.id, {
+    status: 'executada', resolvido_em: new Date().toISOString(), resolvido_por: req.usuario.id
+  });
+  return res.status(200).json({ mensagem: 'Dados do titular excluídos.', fichasAnonimizadas: fichas.length });
+}));
+
+app.post('/api/rh/solicitacoes-titular/:id/recusar', exigirRh, comTratamento(async (req, res) => {
+  const motivo = String((req.body || {}).motivo || '').trim();
+  if (motivo.length < 5 || motivo.length > 500) return res.status(400).json({ erro: 'Informe o motivo da recusa (5 a 500 caracteres).' });
+  const s = await carregarSolicitacaoPendente(req.params.id);
+  if (!s) return res.status(404).json({ erro: 'Pedido não encontrado ou já resolvido.' });
+  await repo.atualizarSolicitacao(s.id, {
+    status: 'recusada', motivo_recusa: motivo, resolvido_em: new Date().toISOString(), resolvido_por: req.usuario.id
+  });
+  await registrarEventoAuditoria({ id: gerarId(), tipoEvento: 'exclusao_recusada', usuarioId: s.usuario_id, candidatoId: s.candidato_id, motivo, executadoPor: req.usuario.id, timestamp: new Date().toISOString(), ip: req.ip });
+  return res.status(200).json({ mensagem: 'Pedido recusado.' });
+}));
+
+// --- Retenção: fichas de NÃO contratados paradas há mais de RETENCAO_DIAS ---
+function fichasForaDoPrazo(candidatos, diasMaximos) {
+  const limite = Date.now() - diasMaximos * 24 * 60 * 60 * 1000;
+  return candidatos.filter((c) =>
+    !c.anonimizadoEm && !c.bancoTalentos &&
+    ['REPROVADO', 'EM_ANALISE'].includes(c.status) &&
+    new Date(c.atualizadoEm || c.criadoEm).getTime() < limite);
+}
+
+app.post('/api/admin/retencao', exigirAdmin, comTratamento(async (req, res) => {
+  const simular = (req.body || {}).simular !== false;
+  const dias = Number((req.body || {}).dias) > 0 ? Number(req.body.dias) : RETENCAO_DIAS;
+  const todas = await lerCandidatos();
+  const elegiveis = fichasForaDoPrazo(todas, dias);
+  if (simular) {
+    return res.status(200).json({ simulacao: true, dias, total: elegiveis.length, fichas: elegiveis.map((c) => ({ id: c.id, status: c.status, atualizadoEm: c.atualizadoEm })) });
+  }
+  const usuariosAfetados = new Set();
+  for (const ficha of elegiveis) {
+    await anonimizarFicha(ficha, 'retencao_vencida', req.usuario.id);
+    if (ficha.usuarioId) usuariosAfetados.add(ficha.usuarioId);
+  }
+  // Exclui a conta quando todas as fichas dela foram anonimizadas.
+  const idsAnonimizados = new Set(elegiveis.map((c) => c.id));
+  let contasExcluidas = 0;
+  for (const usuarioId of usuariosAfetados) {
+    const restantes = todas.filter((c) => c.usuarioId === usuarioId && !idsAnonimizados.has(c.id) && !c.anonimizadoEm);
+    if (!restantes.length) { await excluirConta(usuarioId, 'retencao_vencida', req.usuario.id); contasExcluidas += 1; }
+  }
+  return res.status(200).json({ simulacao: false, dias, fichasAnonimizadas: elegiveis.length, contasExcluidas });
+}));
+
 const limiteGestaoContas = criarLimitador({
   janelaMs: HORA_MS, max: limiteDoAmbiente('LIMITE_CONTAS_CRIADAS_HORA', 60), chave: porUsuarioOuIp,
   mensagem: 'Limite de contas criadas por hora atingido.'
@@ -3996,8 +4291,7 @@ async function criarContaEquipe(req, res, tipo) {
   if (!nome || nome.length > 120) return res.status(400).json({ erro: 'Informe o nome (até 120 caracteres).' });
   if (!REGEX_EMAIL_AUTH.test(email) || email.length > 254) return res.status(400).json({ erro: 'E-mail inválido.' });
 
-  const { data: existente, error } = await supabase.from('usuarios').select('id').eq('email', email).maybeSingle();
-  if (error) throw error;
+  const existente = await repo.buscarUsuarioPorEmail(email);
   if (existente) return res.status(409).json({ erro: 'Já existe uma conta com este e-mail.' });
 
   const { salt, hash } = gerarHashSenha(crypto.randomBytes(24).toString('hex'));
@@ -4009,7 +4303,7 @@ async function criarContaEquipe(req, res, tipo) {
 
   const pedido = await criarPedidoRecuperacao(novo, 'definicao');
   const envio = await enviarPedidoRecuperacao(req, novo, pedido, 'definicao');
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(), tipoEvento: 'conta_criada', usuarioId: novo.id, tipo, criadoPor: req.usuario.id,
     timestamp: new Date().toISOString(), ip: req.ip
   });
@@ -4017,9 +4311,8 @@ async function criarContaEquipe(req, res, tipo) {
 }
 
 async function listarContas(req, res, tipo) {
-  const { data, error } = await supabase.from('usuarios').select('*').eq('tipo', tipo).order('criado_em', { ascending: true });
-  if (error) throw error;
-  return res.status(200).json((data || []).map(usuarioParaCamelCase).map(resumoConta));
+  const data = await repo.listarUsuariosPorTipo(tipo);
+  return res.status(200).json(data.map(usuarioParaCamelCase).map(resumoConta));
 }
 
 async function alterarConta(req, res, tipo) {
@@ -4040,11 +4333,10 @@ async function alterarConta(req, res, tipo) {
   }
   if (!Object.keys(mudancas).length) return res.status(400).json({ erro: 'Nada para alterar.' });
 
-  const { error } = await supabase.from('usuarios').update(mudancas).eq('id', conta.id);
-  if (error) throw error;
-  if (mudancas.ativo === false) await supabase.from('sessoes').delete().eq('usuario_id', conta.id);
+  await repo.atualizarUsuario(conta.id, mudancas);
+  if (mudancas.ativo === false) await repo.removerSessoesDoUsuario(conta.id);
 
-  registrarEventoAuditoria({
+  await registrarEventoAuditoria({
     id: gerarId(), tipoEvento: 'conta_alterada', usuarioId: conta.id, alteracoes: Object.keys(mudancas),
     alteradoPor: req.usuario.id, timestamp: new Date().toISOString(), ip: req.ip
   });
@@ -4060,15 +4352,6 @@ async function reenviarAcesso(req, res, tipo) {
   return res.status(200).json({ mensagem: 'Novo acesso enviado ao e-mail da conta.', ...envio });
 }
 
-const comTratamento = (fn) => async (req, res) => {
-  try {
-    return await fn(req, res);
-  } catch (erro) {
-    console.error('Falha na gestão de contas:', erro.message);
-    return res.status(500).json({ erro: 'Não foi possível concluir a operação agora.' });
-  }
-};
-
 // Master -> administradores (clientes)
 app.get('/api/master/admins', exigirMaster, comTratamento((req, res) => listarContas(req, res, 'admin')));
 app.post('/api/master/admins', exigirMaster, limiteGestaoContas, comTratamento((req, res) => criarContaEquipe(req, res, 'admin')));
@@ -4080,6 +4363,159 @@ app.get('/api/admin/operadores', exigirAdmin, comTratamento((req, res) => listar
 app.post('/api/admin/operadores', exigirAdmin, limiteGestaoContas, comTratamento((req, res) => criarContaEquipe(req, res, 'rh')));
 app.patch('/api/admin/operadores/:id', exigirAdmin, comTratamento((req, res) => alterarConta(req, res, 'rh')));
 app.post('/api/admin/operadores/:id/reenviar-acesso', exigirAdmin, limiteGestaoContas, comTratamento((req, res) => reenviarAcesso(req, res, 'rh')));
+
+// ---------------------------------------------------------------------------
+// VERIFICAÇÃO EM DUAS ETAPAS (MFA, TOTP) para rh, admin e master.
+//   configurar -> mostra QR/segredo; ativar -> confirma com um código e libera
+//   os códigos de recuperação (uma única vez); login -> desafio + verificar.
+// O segredo TOTP fica cifrado (AES-256-GCM) e os códigos de recuperação só
+// existem como hash. Quem perdeu o aplicativo e os códigos é resetado pelo
+// admin (operadores) ou pelo master (administradores).
+// ---------------------------------------------------------------------------
+const limiteMfa = criarLimitador({
+  janelaMs: 15 * 60 * 1000, max: limiteDoAmbiente('LIMITE_MFA_15MIN', 30), chave: porUsuarioOuIp,
+  mensagem: 'Muitas tentativas de verificação. Aguarde alguns minutos.'
+});
+const MAX_FALHAS_MFA = 5;
+
+async function atualizarMfa(usuarioId, campos) {
+  await repo.atualizarUsuario(usuarioId, campos);
+}
+
+const eventoMfa = (tipoEvento, usuario, req, extra) => registrarEventoAuditoria(Object.assign({
+  id: gerarId(), tipoEvento, usuarioId: usuario.id, tipo: usuario.tipo, timestamp: new Date().toISOString(), ip: req.ip
+}, extra || {}));
+
+// Confere o código do aplicativo (6 dígitos) ou um código de recuperação
+// (consumido na hora). { ok, via: 'totp' | 'recuperacao' }.
+async function conferirSegundoFator(usuario, codigo) {
+  const texto = String(codigo || '').trim();
+  if (/^\d{3}\s?\d{3}$/.test(texto) && usuario.mfaSegredo) {
+    const passo = mfa.verificarTotp(mfa.decifrar(usuario.mfaSegredo, materialMfa()), texto, usuario.mfaUltimoPasso);
+    if (passo !== null) {
+      await atualizarMfa(usuario.id, { mfa_ultimo_passo: passo });
+      return { ok: true, via: 'totp' };
+    }
+    return { ok: false };
+  }
+  if (/^[0-9a-fA-F]{5}-?[0-9a-fA-F]{5}$/.test(texto)) {
+    const hash = mfa.hashCodigo(texto);
+    if (usuario.mfaCodigos.includes(hash)) {
+      await atualizarMfa(usuario.id, { mfa_codigos: usuario.mfaCodigos.filter((x) => x !== hash) });
+      return { ok: true, via: 'recuperacao', restantes: usuario.mfaCodigos.length - 1 };
+    }
+  }
+  return { ok: false };
+}
+
+// Segunda etapa do login.
+app.post('/api/auth/mfa/verificar', limiteMfa, comTratamento(async (req, res) => {
+  const { desafio, codigo } = req.body || {};
+  const usuarioId = mfa.lerDesafio(desafio, materialMfa());
+  if (!usuarioId) return res.status(401).json({ erro: 'A verificação expirou. Entre novamente com e-mail e senha.' });
+
+  const chave = `mfa|${usuarioId}`;
+  if (falhasAtuais(chave) >= MAX_FALHAS_MFA) {
+    res.set('Retry-After', String(Math.ceil(JANELA_LOGIN_MS / 1000)));
+    return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos e entre novamente.' });
+  }
+  const usuario = await buscarUsuarioPorId(usuarioId);
+  if (!usuario || !usuario.mfaAtivo || usuario.ativo === false) {
+    return res.status(401).json({ erro: 'A verificação expirou. Entre novamente com e-mail e senha.' });
+  }
+
+  const conferido = await conferirSegundoFator(usuario, codigo);
+  if (!conferido.ok) {
+    registrarFalhaLogin(chave);
+    await eventoMfa('mfa_falha', usuario, req);
+    return res.status(401).json({ erro: 'Código inválido ou já utilizado.' });
+  }
+  falhasLogin.delete(chave);
+
+  const token = await criarSessao(usuario.id);
+  await eventoMfa('login', usuario, req, { email: usuario.email, mfa: conferido.via });
+  if (conferido.via === 'recuperacao') await eventoMfa('mfa_codigo_recuperacao_usado', usuario, req, { restantes: conferido.restantes });
+  const corpo = respostaLoginCompleto(usuario, token, 'Login realizado com sucesso!');
+  if (conferido.via === 'recuperacao') corpo.codigosRestantes = conferido.restantes;
+  return res.status(200).json(corpo);
+}));
+
+app.get('/api/auth/mfa/status', autenticar, (req, res) => {
+  const u = req.usuario;
+  return res.status(200).json({
+    disponivel: u.tipo !== 'candidato', ativo: u.mfaAtivo, obrigatorio: MFA_OBRIGATORIO && u.tipo !== 'candidato',
+    codigosRestantes: u.mfaAtivo ? u.mfaCodigos.length : 0
+  });
+});
+
+app.post('/api/auth/mfa/configurar', autenticar, limiteMfa, comTratamento(async (req, res) => {
+  const u = req.usuario;
+  if (u.tipo === 'candidato') return res.status(403).json({ erro: 'A verificação em duas etapas é para a equipe de RH.' });
+  if (u.mfaAtivo) return res.status(409).json({ erro: 'A verificação em duas etapas já está ativa. Desative antes de configurar de novo.' });
+  const segredo = mfa.gerarSegredo();
+  await atualizarMfa(u.id, { mfa_segredo: mfa.cifrar(segredo, materialMfa()), mfa_ativo: false, mfa_codigos: [], mfa_ultimo_passo: 0 });
+  const uri = mfa.uriOtpauth(segredo, u.email, MARCA.nome);
+  const qr = await QRCode.toDataURL(uri, { margin: 1, width: 220 });
+  return res.status(200).json({ segredo, uri, qr });
+}));
+
+app.post('/api/auth/mfa/ativar', autenticar, limiteMfa, comTratamento(async (req, res) => {
+  const u = req.usuario;
+  if (u.tipo === 'candidato') return res.status(403).json({ erro: 'A verificação em duas etapas é para a equipe de RH.' });
+  if (u.mfaAtivo) return res.status(409).json({ erro: 'A verificação em duas etapas já está ativa.' });
+  if (!u.mfaSegredo) return res.status(400).json({ erro: 'Inicie a configuração antes de confirmar o código.' });
+
+  const chave = `mfa-ativar|${u.id}`;
+  if (falhasAtuais(chave) >= MAX_FALHAS_MFA) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos.' });
+  const passo = mfa.verificarTotp(mfa.decifrar(u.mfaSegredo, materialMfa()), (req.body || {}).codigo, 0);
+  if (passo === null) {
+    registrarFalhaLogin(chave);
+    return res.status(400).json({ erro: 'Código inválido. Confira o horário do celular e tente com o código atual.' });
+  }
+  falhasLogin.delete(chave);
+
+  const codigos = mfa.gerarCodigosRecuperacao(10);
+  await atualizarMfa(u.id, { mfa_ativo: true, mfa_ultimo_passo: passo, mfa_codigos: codigos.map(mfa.hashCodigo) });
+  await eventoMfa('mfa_ativado', u, req);
+  return res.status(200).json({
+    mensagem: 'Verificação em duas etapas ativada. Guarde os códigos de recuperação: eles não serão mostrados de novo.',
+    codigosRecuperacao: codigos
+  });
+}));
+
+app.post('/api/auth/mfa/desativar', autenticar, limiteMfa, comTratamento(async (req, res) => {
+  const u = req.usuario;
+  if (!u.mfaAtivo) return res.status(400).json({ erro: 'A verificação em duas etapas não está ativa.' });
+  if (MFA_OBRIGATORIO) return res.status(403).json({ erro: 'Neste ambiente a verificação em duas etapas é obrigatória e não pode ser desativada.' });
+
+  const chave = `mfa-desativar|${u.id}`;
+  if (falhasAtuais(chave) >= MAX_FALHAS_MFA) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde alguns minutos.' });
+  const corpo = req.body || {};
+  const senhaOk = u.senhaHash ? senhaConfere(String(corpo.senha || ''), u.senhaSalt, u.senhaHash) : true;
+  const conferido = senhaOk ? await conferirSegundoFator(u, corpo.codigo) : { ok: false };
+  if (!senhaOk || !conferido.ok) {
+    registrarFalhaLogin(chave);
+    return res.status(401).json({ erro: 'Senha ou código incorretos.' });
+  }
+  falhasLogin.delete(chave);
+
+  await atualizarMfa(u.id, { mfa_ativo: false, mfa_segredo: null, mfa_codigos: [], mfa_ultimo_passo: 0 });
+  await eventoMfa('mfa_desativado', u, req);
+  return res.status(200).json({ mensagem: 'Verificação em duas etapas desativada.' });
+}));
+
+// Quem perdeu o aplicativo e os códigos: o admin reseta operadores; o master, administradores.
+async function resetarMfaDaConta(req, res, tipo) {
+  const conta = await buscarUsuarioPorId(req.params.id);
+  if (!conta || conta.tipo !== tipo) return res.status(404).json({ erro: 'Conta não encontrada.' });
+  if (conta.id === req.usuario.id) return res.status(400).json({ erro: 'Use a página de segurança para alterar a sua própria verificação.' });
+  await atualizarMfa(conta.id, { mfa_ativo: false, mfa_segredo: null, mfa_codigos: [], mfa_ultimo_passo: 0 });
+  await repo.removerSessoesDoUsuario(conta.id);
+  await eventoMfa('mfa_resetado', conta, req, { executadoPor: req.usuario.id });
+  return res.status(200).json({ mensagem: 'Verificação em duas etapas redefinida. A pessoa deve configurá-la de novo no próximo acesso.' });
+}
+app.post('/api/admin/operadores/:id/mfa/resetar', exigirAdmin, limiteGestaoContas, comTratamento((req, res) => resetarMfaDaConta(req, res, 'rh')));
+app.post('/api/master/admins/:id/mfa/resetar', exigirMaster, limiteGestaoContas, comTratamento((req, res) => resetarMfaDaConta(req, res, 'admin')));
 
 // Conta MASTER: semeada no boot a partir do ambiente do servidor (nunca do
 // código nem do banco de testes). Sem MASTER_EMAIL e MASTER_SENHA, não existe.
@@ -4148,7 +4584,7 @@ async function garantirUsuarioRhTeste() {
   const { salt, hash } = gerarHashSenha(SENHA_RH_TESTE);
   usuarios.push({
     id: gerarId(),
-    nome: 'RH Onboarding Digital',
+    nome: `RH ${MARCA.nome}`,
     email: EMAIL_RH_TESTE,
     senhaSalt: salt,
     senhaHash: hash,
@@ -4195,12 +4631,14 @@ module.exports = app;
 // das plataformas de deploy em nuvem, como Render e Railway, que injetam essa
 // variável automaticamente). Padrão local: 3001, evitando conflito com outros
 // servidores locais, como o do projeto Pré-Vendas na 3000.
-// Na Vercel, NODE_ENV já vem como 'production' e a própria plataforma invoca
-// o app exportado acima como função serverless - chamar app.listen() lá
-// seria redundante (e a Vercel não expõe uma porta TCP tradicional).
+// Na Vercel a própria plataforma importa o app exportado acima e o invoca como
+// função serverless - chamar app.listen() lá seria redundante. Por isso o
+// servidor só abre a porta quando o arquivo é executado diretamente
+// ("node index.js"), em qualquer NODE_ENV: um contêiner em produção
+// (NODE_ENV=production) também escuta, sem depender da Vercel.
 const PORTA = process.env.PORT || 3001;
-if (process.env.NODE_ENV !== 'production') {
+if (require.main === module) {
   app.listen(PORTA, () => {
-    console.log(`Servidor de Onboarding Digital rodando em http://localhost:${PORTA}`);
+    console.log(`Servidor ${MARCA.nome} rodando em http://localhost:${PORTA}`);
   });
 }
