@@ -264,6 +264,22 @@ cp .env.example .env
    5. `ativar_rls.sql` - **liga o RLS** nas 9 tabelas, sem políticas: só o servidor (chave secret) acessa o banco. Aplique somente depois que o servidor já estiver rodando com `SUPABASE_SERVICE_KEY`.
 3. Para testes pessoais, use um projeto Supabase próprio, para não alterar dados compartilhados.
 
+### Produção na Vercel (variáveis obrigatórias)
+
+Em **Settings → Environment Variables** do projeto (ambiente *Production*), depois de cada mudança faça um **Redeploy**:
+
+| Variável | Para quê | Observação |
+|---|---|---|
+| `SUPABASE_URL` e `SUPABASE_SERVICE_KEY` | Banco e armazenamento | A chave `service_role` fica só aqui, nunca no navegador. **Não** defina `SUPABASE_KEY` (chave pública) |
+| `ARMAZENAMENTO_DRIVER=supabase` | PDFs no bucket privado `documentos` | **Obrigatória:** sem ela os PDFs vão para o disco temporário da Vercel e **somem** a cada reinício. Crie antes o bucket privado (ver "Armazenamento de arquivos") |
+| `MFA_CHAVE` | Cifra os segredos do MFA | Segredo de 32+ bytes, estável. Trocar exige redefinir o MFA de todos |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_REMETENTE` | Envio de e-mails (cadastro, recuperação de senha, acesso inicial) | Sem eles os e-mails são só simulados no log. `npm run teste:email -- voce@email.com` valida |
+| `APP_URL` | Endereço público usado nos links dos e-mails | Ex.: `https://rh.suaempresa.com.br` |
+| `MASTER_EMAIL` e `MASTER_SENHA` | Conta master (dono da plataforma) | Opcionais se a conta master já existe no banco. Ative o MFA dela em `seguranca.html` |
+| `MFA_OBRIGATORIO=1` | Exige MFA de toda a equipe | Deixe desligado enquanto a conta pública de demonstração do RH (`onboarding123`) existir |
+
+Antes de vender para um cliente real: desligue a **Autenticação da Vercel** (*Settings → Deployment Protection*), ou use um domínio próprio, para que candidatos de fora abram o sistema e os links dos e-mails; e rode as migrações de `supabase/` no banco.
+
 ### Instalação no servidor do cliente (Postgres próprio, sem Supabase nem Vercel)
 
 Para vender o sistema instalado na infraestrutura do próprio cliente. A aplicação e o banco rodam em contêineres; os dados ficam em volumes do servidor dele.
