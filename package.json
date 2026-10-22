@@ -10,6 +10,7 @@
     "teste:seguranca": "node scripts/teste-seguranca.js",
     "teste:postgres": "node scripts/teste-postgres.js",
     "teste:s3": "node scripts/teste-s3.js",
+    "teste:email": "node scripts/teste-email.js",
     "build": "echo \"Nenhum build necessario - aplicacao servida diretamente pelo Express (servidor, Docker ou funcao serverless).\""
   },
   "repository": {
