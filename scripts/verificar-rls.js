@@ -21,6 +21,16 @@ async function main() {
     process.exit(2);
   }
 
+  // Antes de tudo: a chave precisa ser VÁLIDA. Uma chave apagada/rotacionada recebe
+  // 401 em qualquer tabela, e isso pareceria "protegida" sem ter testado nada.
+  const pre = await fetch(`${url}/rest/v1/configuracoes?select=id&limit=1`, { headers: { apikey: chave, Authorization: `Bearer ${chave}` } });
+  const corpoPre = await pre.text();
+  if (/unregistered api key|invalid api key|apikey/i.test(corpoPre) && !/permission denied/i.test(corpoPre)) {
+    console.error('CHAVE INVÁLIDA: o Supabase não reconhece SUPABASE_KEY (apagada ou rotacionada?).');
+    console.error('O teste NÃO é conclusivo. Cole a chave publishable atual no .env (Project Settings > API Keys) e rode de novo.');
+    process.exit(2);
+  }
+
   let expostas = 0;
   for (const [tabela, coluna] of Object.entries(TABELAS)) {
     const r = await fetch(`${url}/rest/v1/${tabela}?select=${coluna}`, {
