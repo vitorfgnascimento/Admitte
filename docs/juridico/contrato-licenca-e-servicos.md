@@ -1,6 +1,6 @@
 # CONTRATO DE LICENÇA DE USO DE SOFTWARE E PRESTAÇÃO DE SERVIÇOS
 
-**Contrato nº** [__________] **· Versão do modelo:** 1.0
+**Contrato nº** [\_\_\_\_\_\_\_\_\_\_] **· Versão do modelo:** 1.0
 
 > **MINUTA PARA PREENCHIMENTO.** Os campos entre colchetes `[ ]` devem ser
 > preenchidos para cada cliente; nas opções marcadas com `( )`, assinale uma e
@@ -12,15 +12,15 @@
 ## QUALIFICAÇÃO DAS PARTES
 
 **CONTRATADA:** [RAZÃO SOCIAL OU NOME EMPRESARIAL], inscrita no CNPJ sob o nº
-[__.___.___/____-__], com sede em [ENDEREÇO COMPLETO, CIDADE/UF, CEP], e-mail
+[\_\_.\_\_\_.\_\_\_/\_\_\_\_-\_\_], com sede em [ENDEREÇO COMPLETO, CIDADE/UF, CEP], e-mail
 para comunicações oficiais [E-MAIL], neste ato representada por
-[NOME DO REPRESENTANTE], [CARGO], CPF nº [___.___.___-__], doravante
+[NOME DO REPRESENTANTE], [CARGO], CPF nº [\_\_\_.\_\_\_.\_\_\_-\_\_], doravante
 denominada **CONTRATADA**.
 
 **CONTRATANTE:** [RAZÃO SOCIAL], inscrita no CNPJ sob o nº
-[__.___.___/____-__], com sede em [ENDEREÇO COMPLETO, CIDADE/UF, CEP], e-mail
+[\_\_.\_\_\_.\_\_\_/\_\_\_\_-\_\_], com sede em [ENDEREÇO COMPLETO, CIDADE/UF, CEP], e-mail
 para comunicações oficiais [E-MAIL], neste ato representada por
-[NOME DO REPRESENTANTE], [CARGO], CPF nº [___.___.___-__], doravante
+[NOME DO REPRESENTANTE], [CARGO], CPF nº [\_\_\_.\_\_\_.\_\_\_-\_\_], doravante
 denominada **CONTRATANTE**.
 
 As partes, em conjunto denominadas **Partes**, celebram o presente Contrato,
@@ -67,6 +67,7 @@ hospedagem quando aplicável, manutenção, atualização e suporte técnico).
 2.2. A modalidade contratada é:
 
 ( ) **Nuvem** (hospedagem pela CONTRATADA)
+
 ( ) **Instalação Local** (infraestrutura da CONTRATANTE)
 
 2.3. A Plataforma é uma **ferramenta de apoio** ao processo admissional. A
@@ -95,7 +96,7 @@ escrito, com antecedência mínima de **[30 (trinta)] dias** do término.
 no **Anexo III (Proposta Comercial)**.
 
 4.2. Os pagamentos serão feitos por [boleto / PIX / cartão / transferência],
-até o dia [__] de cada [mês / ano], mediante emissão de nota fiscal ou
+até o dia [\_\_] de cada [mês / ano], mediante emissão de nota fiscal ou
 documento fiscal equivalente pela CONTRATADA.
 
 4.3. Em caso de atraso, incidirão sobre o valor devido: multa de **[2%
@@ -121,15 +122,21 @@ CONTRATADA for optante pelo Simples Nacional/MEI, informar na nota fiscal.]
 
 a) disponibilizar a Plataforma conforme o Anexo I, observados os níveis de
 serviço lá previstos;
+
 b) fornecer correções e atualizações, inclusive as necessárias para manter a
 Plataforma em conformidade com alterações legais que afetem suas
 funcionalidades existentes, em prazo razoável;
+
 c) prestar suporte técnico nos canais e horários do Anexo I;
+
 d) adotar medidas de segurança técnicas e administrativas aptas a proteger os
 Dados da CONTRATANTE, conforme o Anexo II;
+
 e) tratar os dados pessoais apenas conforme as instruções da CONTRATANTE e o
 Anexo II;
+
 f) manter sigilo sobre as informações da CONTRATANTE (cláusula 11);
+
 g) comunicar previamente, sempre que possível, manutenções programadas que
 causem indisponibilidade.
 
@@ -144,22 +151,30 @@ expressa da CONTRATANTE, para fins de suporte, e ficará registrado.
 6.1. A CONTRATANTE se obriga a:
 
 a) pagar pontualmente os valores devidos;
+
 b) usar a Plataforma de acordo com este Contrato, a legislação e a
 documentação fornecida;
+
 c) definir a base legal e a finalidade do tratamento dos dados dos Candidatos
 e informá-los adequadamente, inclusive mantendo atualizados os textos de
 Termos de Uso e Política de Privacidade exibidos a eles com sua marca;
+
 d) manter a confidencialidade das credenciais dos Usuários Autorizados,
 ativar a verificação em duas etapas nas contas administrativas e responder
 pelos atos praticados com essas credenciais;
+
 e) desativar imediatamente o acesso de Usuários Autorizados desligados ou que
 não devam mais acessar a Plataforma;
+
 f) conferir a veracidade, a validade e a regularidade dos documentos e
 informações enviados pelos Candidatos;
+
 g) atender às solicitações dos titulares de dados (Candidatos), utilizando as
 ferramentas disponibilizadas na Plataforma;
+
 h) não inserir na Plataforma conteúdo ilícito ou dados desnecessários à
 finalidade admissional;
+
 i) na **Modalidade Instalação Local**, cumprir as obrigações adicionais da
 cláusula 7.
 
@@ -168,12 +183,17 @@ CONTRATADA:
 
 a) copiar, modificar, descompilar, fazer engenharia reversa ou criar obras
 derivadas da Plataforma;
+
 b) sublicenciar, ceder, alugar, revender ou disponibilizar a Plataforma a
 terceiros, inclusive a outras empresas do mesmo grupo econômico não listadas
 no Anexo III;
+
 c) remover avisos de direitos autorais ou de titularidade;
+
 d) usar a Plataforma para desenvolver produto concorrente;
+
 e) realizar testes de intrusão ou de carga sem aviso prévio à CONTRATADA;
+
 f) contornar limites técnicos, de uso ou de segurança da Plataforma.
 
 ## CLÁUSULA 7 - DISPOSIÇÕES ESPECÍFICAS DA INSTALAÇÃO LOCAL
@@ -185,13 +205,17 @@ f) contornar limites técnicos, de uso ou de segurança da Plataforma.
 a) fornecer e manter a infraestrutura (servidor, sistema operacional, rede,
 domínio, certificado HTTPS, serviço de e-mail e armazenamento) nos requisitos
 mínimos informados pela CONTRATADA;
+
 b) realizar e testar periodicamente as **cópias de segurança (backup)** do
 banco de dados, dos documentos armazenados e do arquivo de configuração;
+
 c) guardar as chaves e segredos de configuração e garantir a segurança física
 e lógica do ambiente;
+
 d) aplicar, ou permitir que a CONTRATADA aplique, as atualizações fornecidas
 em até [30 (trinta)] dias de sua disponibilização, especialmente as de
 segurança;
+
 e) fornecer acesso remoto seguro quando necessário ao suporte.
 
 7.2. A CONTRATADA **não responde** por indisponibilidade, perda de dados ou
@@ -253,15 +277,20 @@ CONTRATANTE não descritas no Anexo I.
 
 a) decisões de admissão, contratação ou recusa de Candidatos, e pela
 validade jurídica, autenticidade ou conteúdo de documentos enviados;
+
 b) descumprimento de obrigações trabalhistas, previdenciárias ou fiscais da
 CONTRATANTE;
+
 c) mau uso da Plataforma, uso de credenciais por terceiros ou descumprimento
 das obrigações da cláusula 6;
+
 d) falhas de serviços de terceiros fora de seu controle (provedores de
 internet, energia, serviços de login de terceiros, consulta de CEP, e-mail
 do destinatário, ferramentas de acessibilidade de terceiros), observado o
 Anexo II quanto aos suboperadores;
+
 e) caso fortuito ou força maior (art. 393 do Código Civil);
+
 f) **lucros cessantes, perda de receita, perda de oportunidade ou danos
 indiretos**.
 
@@ -296,9 +325,11 @@ anos** após seu término; para dados pessoais, enquanto durar o tratamento.
 
 12.1. Qualquer das Partes poderá rescindir este Contrato **sem justa causa**,
 mediante aviso prévio por escrito de **[30 (trinta)] dias**.
+
 ( ) Sem multa rescisória.
-( ) Com multa de [__% do valor das mensalidades restantes até o fim do
-período vigente / R$ ______], devida pela Parte que rescindir antes do término
+
+( ) Com multa de [\_\_% do valor das mensalidades restantes até o fim do
+período vigente / R$ \_\_\_\_\_\_], devida pela Parte que rescindir antes do término
 do prazo da cláusula 3.1.
 
 12.2. O Contrato poderá ser rescindido **imediatamente, com justa causa**, por
@@ -306,8 +337,10 @@ notificação, se a outra Parte:
 
 a) descumprir obrigação contratual e não sanar a falha em **[15 (quinze)]
 dias** após notificada;
+
 b) tiver falência, recuperação judicial ou insolvência decretada ou
 requerida, observada a legislação aplicável;
+
 c) violar a cláusula 6.2, a cláusula 11 ou o Anexo II.
 
 12.3. A rescisão não isenta a CONTRATANTE do pagamento dos valores devidos até
@@ -396,7 +429,7 @@ testemunhas.
 
 | CONTRATADA | CONTRATANTE |
 |---|---|
-| ______________________________ | ______________________________ |
+| \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ | \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_ |
 | [NOME DO REPRESENTANTE] | [NOME DO REPRESENTANTE] |
 | [CARGO] | [CARGO] |
 
@@ -404,8 +437,8 @@ testemunhas.
 
 | 1. | 2. |
 |---|---|
-| Nome: [__________] | Nome: [__________] |
-| CPF: [__________] | CPF: [__________] |
+| Nome: [\_\_\_\_\_\_\_\_\_\_] | Nome: [\_\_\_\_\_\_\_\_\_\_] |
+| CPF: [\_\_\_\_\_\_\_\_\_\_] | CPF: [\_\_\_\_\_\_\_\_\_\_] |
 
 ---
 ---
@@ -441,10 +474,10 @@ Anexo III ou, na sua falta, comunicado à CONTRATANTE para ajuste do plano.
 
 | Etapa | Responsável | Prazo |
 |---|---|---|
-| Criação do ambiente e da conta administrativa da CONTRATANTE | CONTRATADA | [__] dias úteis da assinatura |
-| Envio de logotipo, cores e textos de privacidade da marca | CONTRATANTE | [__] dias úteis |
-| Configuração de e-mail e domínio (quando aplicável) | [CONTRATADA / CONTRATANTE] | [__] dias úteis |
-| Treinamento inicial ([__] horas, remoto) | CONTRATADA | [__] dias úteis |
+| Criação do ambiente e da conta administrativa da CONTRATANTE | CONTRATADA | [\_\_] dias úteis da assinatura |
+| Envio de logotipo, cores e textos de privacidade da marca | CONTRATANTE | [\_\_] dias úteis |
+| Configuração de e-mail e domínio (quando aplicável) | [CONTRATADA / CONTRATANTE] | [\_\_] dias úteis |
+| Treinamento inicial ([\_\_] horas, remoto) | CONTRATADA | [\_\_] dias úteis |
 
 ## 4. Disponibilidade (somente Modalidade Nuvem)
 
@@ -453,9 +486,13 @@ Anexo III ou, na sua falta, comunicado à CONTRATANTE para ajuste do plano.
 
 a) manutenções programadas, avisadas com [48 (quarenta e oito)] horas de
 antecedência e preferencialmente entre [22h e 6h];
+
 b) manutenções emergenciais de segurança;
+
 c) falhas da internet, da rede ou dos equipamentos da CONTRATANTE;
+
 d) suspensão por inadimplência ou por uso em desacordo com o Contrato;
+
 e) caso fortuito ou força maior.
 
 4.2. **Créditos por indisponibilidade:** se a disponibilidade mensal ficar
@@ -478,14 +515,16 @@ disponível, sem garantia de percentual mínimo."]*
 ## 5. Cópias de segurança (Modalidade Nuvem)
 
 A CONTRATADA manterá cópias de segurança do banco de dados com frequência
-mínima [diária] e retenção de [__] dias, e cópia dos documentos armazenados
+mínima [diária] e retenção de [\_\_] dias, e cópia dos documentos armazenados
 conforme a política do provedor de armazenamento. Na Modalidade Instalação
 Local, aplica-se a cláusula 7.1(b) do Contrato.
 
 ## 6. Suporte técnico
 
 6.1. **Canais:** [E-MAIL DE SUPORTE] · [WHATSAPP/TELEFONE] · [PORTAL]
+
 6.2. **Horário:** [dias úteis, das 9h às 18h, horário de Brasília].
+
 6.3. **Quem pode abrir chamados:** Usuários Autorizados da CONTRATANTE. O
 suporte não atende Candidatos diretamente, salvo acordo no Anexo III.
 
@@ -527,7 +566,7 @@ ou funcionalidades substancialmente novas poderão ser oferecidos à parte.
 | **Dados sensíveis** | Podem ocorrer, conforme os documentos exigidos pela CONTRATANTE (ex.: atestado de saúde ocupacional, raça/cor, dados de dependentes menores). A CONTRATANTE é responsável por exigir apenas o necessário e pela respectiva base legal |
 | **Operações** | Coleta, recepção, armazenamento, consulta, exibição, exportação, transmissão aos Usuários Autorizados e eliminação |
 | **Duração** | Vigência do Contrato, mais os prazos da cláusula 13 |
-| **Local** | ( ) Nuvem: provedores listados no item 5, região [__________] · ( ) Instalação Local: infraestrutura da CONTRATANTE |
+| **Local** | ( ) Nuvem: provedores listados no item 5, região [\_\_\_\_\_\_\_\_\_\_] · ( ) Instalação Local: infraestrutura da CONTRATANTE |
 
 ## 3. Obrigações da CONTRATADA (Operadora)
 
@@ -536,18 +575,25 @@ A CONTRATADA se obriga a:
 a) tratar os dados apenas conforme as instruções documentadas da CONTRATANTE,
 entendidas como este Contrato e o uso que a CONTRATANTE faz das
 funcionalidades da Plataforma, e avisá-la se considerar uma instrução ilegal;
+
 b) não usar os dados para finalidade própria, nem vendê-los, compartilhá-los
 ou cedê-los, salvo aos suboperadores do item 5 ou por determinação legal;
+
 c) garantir que seus empregados e prestadores com acesso aos dados estejam
 sujeitos a dever de sigilo;
+
 d) adotar as medidas de segurança do item 4;
+
 e) auxiliar a CONTRATANTE, na medida do possível, a atender os direitos dos
 titulares (art. 18 da LGPD) e repassar-lhe, em até [5 (cinco)] dias úteis,
 qualquer solicitação de titular recebida diretamente;
+
 f) auxiliar a CONTRATANTE em relatórios de impacto (art. 38 da LGPD) e em
 solicitações da Autoridade Nacional de Proteção de Dados (ANPD), mediante
 pedido;
+
 g) eliminar ou devolver os dados ao fim do Contrato, conforme a cláusula 13;
+
 h) manter registro das operações de tratamento que realizar (art. 37 da LGPD).
 
 ## 4. Medidas de segurança
@@ -579,7 +625,7 @@ ou superior.
 | [Vercel Inc.] | Hospedagem da aplicação | [REGIÃO] |
 | [PROVEDOR DE E-MAIL] | Envio de e-mails transacionais | [REGIÃO] |
 | [Google LLC] | Login com conta Google (opcional, apenas se o titular optar) | [EUA] |
-| [Outros] | [__________] | [__________] |
+| [Outros] | [\_\_\_\_\_\_\_\_\_\_] | [\_\_\_\_\_\_\_\_\_\_] |
 
 *[Nota: na Modalidade Instalação Local, a tabela inclui apenas os serviços
 efetivamente usados pela CONTRATANTE. A consulta de CEP (ViaCEP) e o VLibras
@@ -627,10 +673,13 @@ A CONTRATANTE garante que:
 
 a) possui base legal para o tratamento dos dados que inserir ou mandar
 coletar na Plataforma;
+
 b) informa os titulares sobre o tratamento, inclusive pelos textos de
 privacidade exibidos na Plataforma com sua marca;
+
 c) define e cumpre os prazos de guarda dos dados admissionais exigidos pela
 legislação trabalhista, previdenciária e fiscal;
+
 d) atende às solicitações dos titulares e às determinações da ANPD.
 
 ---
@@ -642,18 +691,18 @@ d) atende às solicitações dos titulares e às determinações da ANPD.
 |---|---|
 | **Modalidade** | ( ) Nuvem ( ) Instalação Local |
 | **Plano** | [NOME DO PLANO] |
-| **Taxa de implantação** | R$ [______] ( ) à vista ( ) em [__] parcelas |
-| **Mensalidade / anuidade** | R$ [______] por [mês / ano] |
-| **Admissões incluídas** | [___] por [mês / ano] · excedente: R$ [___] por admissão |
-| **Usuários Autorizados incluídos** | [___] · adicional: R$ [___] por usuário |
-| **Armazenamento incluído** | [___] GB · adicional: R$ [___] por GB |
-| **API de integração** | ( ) Incluída ( ) Não incluída ( ) R$ [___] |
+| **Taxa de implantação** | R$ [\_\_\_\_\_\_] ( ) à vista ( ) em [\_\_] parcelas |
+| **Mensalidade / anuidade** | R$ [\_\_\_\_\_\_] por [mês / ano] |
+| **Admissões incluídas** | [\_\_\_] por [mês / ano] · excedente: R$ [\_\_\_] por admissão |
+| **Usuários Autorizados incluídos** | [\_\_\_] · adicional: R$ [\_\_\_] por usuário |
+| **Armazenamento incluído** | [\_\_\_] GB · adicional: R$ [\_\_\_] por GB |
+| **API de integração** | ( ) Incluída ( ) Não incluída ( ) R$ [\_\_\_] |
 | **Empresas/CNPJs autorizados a usar** | [CNPJs, se houver filiais ou empresas do grupo] |
-| **Hora técnica para serviços extras** | R$ [______] |
-| **Vencimento** | Dia [__] de cada [mês / ano] |
+| **Hora técnica para serviços extras** | R$ [\_\_\_\_\_\_] |
+| **Vencimento** | Dia [\_\_] de cada [mês / ano] |
 | **Forma de pagamento** | [boleto / PIX / cartão / transferência] |
-| **Desconto/condição especial** | [__________] |
-| **Validade da proposta** | [__] dias |
+| **Desconto/condição especial** | [\_\_\_\_\_\_\_\_\_\_] |
+| **Validade da proposta** | [\_\_] dias |
 
 **Observações específicas deste cliente:**
-[__________]
+[\_\_\_\_\_\_\_\_\_\_]
