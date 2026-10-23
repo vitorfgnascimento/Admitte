@@ -137,7 +137,9 @@
       ]),
       el('p', { class: 'termos-versao' }, [
         document.createTextNode('Versão ' + VERSAO + ' · '),
-        el('a', { href: '/politica-privacidade.html', target: '_blank', rel: 'noopener', texto: 'Ler a política de privacidade completa' })
+        el('a', { href: '/politica-privacidade.html', target: '_blank', rel: 'noopener', texto: 'Ler a política de privacidade completa' }),
+        document.createTextNode(' · '),
+        el('a', { href: '/termos-de-uso.html', target: '_blank', rel: 'noopener', texto: 'Ler os termos de uso completos' })
       ])
     ];
   }

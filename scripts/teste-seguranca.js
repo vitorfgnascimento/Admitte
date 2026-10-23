@@ -73,7 +73,7 @@ async function iniciarAmbiente() {
     env: {
       ...process.env,
       ...extraPg(PORTA_PROD),
-      NODE_ENV: 'production', DIRETORIO_DADOS: pastaTemp, MFA_OBRIGATORIO: '1', LIMITE_CADASTROS_HORA: '1000', LIMITE_RECUPERACOES_IP_HORA: '1000',
+      NODE_ENV: 'production', DIRETORIO_DADOS: pastaTemp, MFA_OBRIGATORIO: '1', API_KEY_ADMISSOES: '', LIMITE_CADASTROS_HORA: '1000', LIMITE_RECUPERACOES_IP_HORA: '1000',
       MARCA_NOME: 'Acme <b>RH', MARCA_LOGO_URL: 'https://cdn.exemplo.test/logo.svg', MARCA_COR: '#1E40AF',
       SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '',
       ARMAZENAMENTO_DRIVER: 'local', SENHA_RH_TESTE: '', MASTER_EMAIL: '', MASTER_SENHA: ''
@@ -174,6 +174,12 @@ async function suite(BASE, urlFalso) {
   t('5.2', 'Marca', 'O símbolo da Admitte é o logo padrão só com o nome padrão (cliente com nome próprio não herda)', marcaLib.carregar({}).logoUrl === '/marca/logo.png' && marcaLib.carregar({ MARCA_NOME: 'Acme' }).logoUrl === null, '');
   t('5.2', 'Marca', 'O arquivo do logo padrão existe e é servido', (await fetch(BASE + '/marca/logo.png')).headers.get('content-type') === 'image/png', '');
   t('5.2', 'Marca', 'Cor fora do formato #RRGGBB é descartada (sem injeção de CSS)', marcaLib.carregar({ MARCA_COR: 'red; } body{display:none' }).css === '' && marcaLib.carregar({ MARCA_COR: '#1E40AF' }).css.includes('--verde: #1E40AF'), '');
+
+  // ---- 6.7 Termos de Uso próprios e favicon da marca ----
+  const htmlTermos = await (await fetch(BASE + '/termos-de-uso.html')).text();
+  t('6.7', 'Termos de Uso', 'Página própria de Termos de Uso com a marca e link para a política', htmlTermos.includes('<title>Termos de Uso - Admitte</title>') && !htmlTermos.includes('Onboarding Digital') && htmlTermos.includes('/politica-privacidade.html') && /Lei nº 13\.709/.test(htmlTermos), '');
+  t('6.7', 'Termos de Uso', 'Política de Privacidade e pop-up apontam para os Termos de Uso', (await (await fetch(BASE + '/politica-privacidade.html')).text()).includes('/termos-de-uso.html') && (await (await fetch(BASE + '/termos-privacidade.js')).text()).includes('/termos-de-uso.html'), '');
+  t('6.7', 'Marca', 'O logo da marca vira o favicon das páginas', htmlLogin.includes('<link rel="icon" href="/marca/logo.png">') && htmlTermos.includes('<link rel="icon" href="/marca/logo.png">'), '');
 
   // ---- 2.1 Cabeçalhos ----
   const h = (await req('GET', '/login.html')).headers;
@@ -563,6 +569,7 @@ async function suiteProducao(BASE, BASE_APP) {
   const htmlMarca = await (await fetch(BASE + '/login.html')).text();
   t('5.2', 'Produção', 'Nome da marca do cliente aparece escapado (sem HTML injetado)', htmlMarca.includes('Acme &lt;b&gt;RH') && !htmlMarca.includes('Acme <b>RH'), '');
   t('5.2', 'Produção', 'Logo do cliente substitui o ícone padrão nas telas', htmlMarca.includes('<img class="ic ic-logo" src="https://cdn.exemplo.test/logo.svg"') && !htmlMarca.includes('<use href="#i-logo"/></svg>\n        <span>'), '');
+  t('6.7', 'Produção', 'Favicon do cliente usa o logo configurado (https)', htmlMarca.includes('<link rel="icon" href="https://cdn.exemplo.test/logo.svg">'), '');
   t('5.2', 'Produção', 'Cor da marca é injetada como variável de tema', htmlMarca.includes('<style id="marca-cores">:root { --verde: #1E40AF'), '');
   const marcaProd = await (await fetch(BASE + '/api/marca')).json();
   t('5.2', 'Produção', '/api/marca reflete a configuração do ambiente', marcaProd.nome === 'Acme <b>RH' && marcaProd.logoUrl === 'https://cdn.exemplo.test/logo.svg', JSON.stringify(marcaProd));
@@ -576,7 +583,11 @@ async function suiteProducao(BASE, BASE_APP) {
     const naOutra = await falha(BASE_APP);
     t('5.5', 'Limites compartilhados', 'Falhas de login somadas entre duas instâncias: a 6ª é bloqueada (429)', [...parte1, ...parte2].every((s) => s === 401) && sexta === 429, [...parte1, ...parte2, sexta].join(','));
     t('5.5', 'Limites compartilhados', 'O bloqueio vale também na outra instância (429)', naOutra === 429, `HTTP ${naOutra}`);
-  }  // MFA_OBRIGATORIO=1: a equipe sem MFA entra, mas só alcança a página de segurança
+  }  // API de integração desativada (sem API_KEY_ADMISSOES): nega e não revela a configuração
+  const apiOff = await fetch(BASE + '/api/v1/admissoes', { headers: { 'x-api-key': 'qualquer-chave-0123456789' } });
+  const apiOffJson = await apiOff.json().catch(() => ({}));
+  t('7.2', 'Produção', 'API de integração desativada nega acesso (503) sem citar variáveis de ambiente', apiOff.status === 503 && !/API_KEY|ambiente do servidor/i.test(JSON.stringify(apiOffJson)), `HTTP ${apiOff.status} ${JSON.stringify(apiOffJson)}`);
+  // MFA_OBRIGATORIO=1: a equipe sem MFA entra, mas só alcança a página de segurança
   const rhProd = await fetch(BASE + '/api/auth/login', { method: 'POST', headers: J, body: JSON.stringify({ email: 'rh@onboarding.local', senha: 'onboarding123' }) });
   const rhProdJson = await rhProd.json();
   t('3.4', 'Produção', 'Com MFA obrigatório, o login do RH sem MFA sinaliza a configuração obrigatória', rhProd.status === 200 && rhProdJson.mfaConfiguracaoObrigatoria === true, `HTTP ${rhProd.status}`);

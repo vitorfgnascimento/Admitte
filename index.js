@@ -3332,8 +3332,12 @@ function chavesIguais(a, b) {
 
 function exigirApiKeyAdmissoes(req, res, next) {
   if (CHAVE_API_ADMISSOES.length < TAMANHO_MINIMO_CHAVE_API) {
+    // Em produção a resposta não revela como o servidor é configurado; o nome
+    // da variável só aparece fora de produção, para quem está configurando.
     return res.status(503).json({
-      erro: `API de integração desativada: defina API_KEY_ADMISSOES (mínimo de ${TAMANHO_MINIMO_CHAVE_API} caracteres) no ambiente do servidor.`
+      erro: EXIBIR_LINK_ATIVACAO
+        ? `API de integração desativada: defina API_KEY_ADMISSOES (mínimo de ${TAMANHO_MINIMO_CHAVE_API} caracteres) no ambiente do servidor.`
+        : 'API de integração indisponível.'
     });
   }
   const chaveRecebida = req.headers['x-api-key'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();

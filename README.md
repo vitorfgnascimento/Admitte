@@ -180,6 +180,7 @@ Recursos incluídos depois das Etapas 1 a 4 (cobertos pelas migrações em `supa
 - **Momento 1 (login.html):** frase + link "Termos de privacidade" (pop-up) ao lado do botão "Criar Conta"; o servidor exige o aceite (`aceiteTermos`) e grava `consentimentoCadastro` no usuário.
 - **Momento 2 (ficha.html):** frase "Ao continuar você concorda com as políticas de privacidade e os termos de uso" + link "Termos de privacidade" (pop-up com finalidade, base legal, consentimento e direitos do art. 18) ao lado do botão de envio; backend grava `consentimentoFichaLGPD` na ficha.
 - **Momento 3 (ficha.html):** a mesma frase e link ao lado do botão que conclui a assinatura digital (o pop-up traz a cláusula sobre a validade da assinatura eletrônica); backend grava `consentimentoContratoLGPD` (com hash SHA-256 das minutas) na ficha.
+- **Termos de Uso e Política de Privacidade:** páginas próprias, `/termos-de-uso.html` e `/politica-privacidade.html`, ligadas entre si e ao pop-up de termos (o nome da marca vem de `MARCA_NOME`). O texto é uma **minuta**: peça a revisão do jurídico antes de oferecer a clientes (inclusive o foro, os prazos de guarda e o contato do encarregado/DPO).
 - **Painel do RH (rh.html):** card "Trilha de Auditoria e Conformidade LGPD" mostra o status dos dois consentimentos (data/hora e IP) e um botão "Visualizar Log de Auditoria" que exibe o JSON bruto dos eventos daquela ficha (`GET /api/rh/fichas/:id/auditoria`).
 
 ### Direitos do titular e retenção (LGPD, art. 18)
