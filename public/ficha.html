@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-papel.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onboarding Digital - Ficha do Candidato</title>
@@ -1411,7 +1412,13 @@
         const input = barra.querySelector('[data-input]');
         if (input) input.value = '';
       } catch (erro) {
-        erroUpload.textContent = erro.message;
+        let texto = erro.message;
+        if (/pertence a outra conta/i.test(texto)) {
+          texto = (sessaoUsuario && sessaoUsuario.tipo !== 'candidato')
+            ? 'Você entrou como equipe do RH. Para reenviar o documento, entre com a conta do candidato.'
+            : 'Não foi possível confirmar a sua ficha. Atualize a página e tente novamente.';
+        }
+        erroUpload.textContent = texto;
         erroUpload.style.display = 'block';
       } finally {
         if (btnEnviar) btnEnviar.disabled = false;
@@ -2425,7 +2432,29 @@
       atualizarProgresso();
       carregarConfiguracoesPublicas(); // sem await: nunca atrasa nem bloqueia a página
 
-      const idNaUrl = new URLSearchParams(window.location.search).get('id');
+      let idNaUrl = new URLSearchParams(window.location.search).get('id');
+
+      // Candidato logado: a página sempre usa a ficha da PRÓPRIA conta (nunca um id de link ou de
+      // histórico), então ele não cai na ficha de outra pessoa e pode reenviar documentos com pendência.
+      if (tokenSessao()) {
+        try {
+          const rs = await fetch(API + '/auth/sessao', { headers: cabecalhosAutenticados() });
+          const tipoSessao = rs.ok ? (await rs.json()).usuario.tipo : null;
+          if (tipoSessao === 'candidato') {
+            const rm = await fetch(API + '/candidato/minha', { headers: cabecalhosAutenticados() });
+            if (rm.ok) {
+              const propria = await rm.json();
+              await carregarFichaExistente(propria.id);
+              window.history.replaceState(null, '', '?id=' + encodeURIComponent(propria.id));
+              await carregarSessaoOpcional();
+              return;
+            }
+            // Ainda sem ficha: segue para o formulário novo, ignorando qualquer id estranho na URL.
+            if (idNaUrl) { window.history.replaceState(null, '', window.location.pathname); idNaUrl = null; }
+          }
+        } catch (erro) { /* segue o fluxo normal abaixo */ }
+      }
+
       if (idNaUrl) {
         // Acesso direto a uma ficha já existente por link (ex.: "Copiar link"
         // no Painel do RH) - exige login; o servidor só entrega a ficha ao RH

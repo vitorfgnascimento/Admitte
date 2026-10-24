@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-papel.js"></script>
   <script src="/sessao-previa.js" data-modo="protegida"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -175,25 +176,26 @@
     .vazio-amigavel { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
     .vazio-amigavel .ic { width: 2rem; height: 2rem; color: var(--tinta-3); }
 
-    .grade-documentos { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.75rem; }
-    .item-documento { display: flex; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 0.625rem; min-height: 6.5rem; background: var(--papel); border: 1px solid var(--borda); border-radius: 0.75rem; padding: 0.75rem 0.875rem; font-size: 0.875rem; }
-    .item-documento-linha-principal { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
-    .item-documento-titulo { font-weight: 600; font-size: 0.9375rem; flex: 1 1 auto; min-width: 0; }
-    .item-documento-linha-principal > .btn-pdf, .item-documento-linha-principal > .item-documento-situacao { flex: 0 0 auto; margin-left: auto; }
+    .grade-documentos { display: grid; grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); gap: 0.625rem; }
+    .item-documento { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0.5rem; min-height: 0; background: var(--papel); border: 1px solid var(--borda); border-radius: 0.75rem; padding: 0.75rem 0.875rem; font-size: 0.875rem; }
+    .item-documento-linha-principal { display: flex; flex-direction: column; align-items: stretch; gap: 0.5rem; }
+    .item-documento-titulo { font-weight: 600; font-size: 0.875rem; line-height: 1.25; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+    .item-documento-linha-principal > .btn-pdf { width: 100%; }
     .hash-assinatura { display: block; margin-top: 0.25rem; font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; word-break: break-all; color: var(--tinta-2); }
     .item-documento-situacao { font-size: 0.8125rem; color: var(--tinta-2); }
-    .btn-pdf { min-height: 2.25rem; min-width: 10.5rem; justify-content: center; padding: 0.25rem 0.75rem; font-size: 0.8125rem; white-space: nowrap; }
-    .acoes-documento { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .btn-pdf { min-height: 1.875rem; justify-content: center; text-align: center; padding: 0.125rem 0.625rem; font-size: 0.75rem; white-space: nowrap; }
+    .acoes-documento { display: flex; flex-wrap: nowrap; gap: 0.375rem; align-items: stretch; }
+    .acoes-documento > .btn-aceitar-documento, .acoes-documento > .badge-documento-aceito, .acoes-documento > .btn-marcar-pendencia { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; line-height: 1.2; }
     .secao-contrato-rh .item-documento { min-height: 9rem; } /* mesma altura com ou sem hash */
-    .btn-aceitar-documento { min-height: 2.25rem; padding: 0.25rem 0.75rem; font-size: 0.8125rem; }
-    .badge-documento-aceito { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--verde-texto); font-size: 0.8125rem; font-weight: 600; }
+    .btn-aceitar-documento { min-height: 1.875rem; padding: 0.125rem 0.5rem; font-size: 0.75rem; }
+    .badge-documento-aceito { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; min-height: 1.875rem; color: var(--verde-texto); font-size: 0.75rem; font-weight: 600; }
     .btn-marcar-pendencia {
-      min-height: 2.25rem;
+      min-height: 1.875rem;
       background: none;
       border: 1px solid var(--perigo-borda);
       color: var(--perigo);
-      padding: 0.25rem 0.75rem;
-      font-size: 0.8125rem; font-weight: 600;
+      padding: 0.125rem 0.5rem;
+      font-size: 0.75rem; font-weight: 600;
       border-radius: var(--r-controle);
     }
     .btn-marcar-pendencia:hover { background: var(--perigo-fundo); }
@@ -1097,11 +1099,9 @@
               <div class="acoes-documento">
                 ${aceito
                   ? `<span class="badge-documento-aceito">${icone('ok')}Documento aceito</span>`
-                  : `<button type="button" class="btn-aceitar-documento" data-aceitar-documento="${ficha.id}:${doc.tipo}">Aceitar Documento</button>`
+                  : `<button type="button" class="btn-aceitar-documento" data-aceitar-documento="${ficha.id}:${doc.tipo}">Aceitar</button>`
                 }
-                <button type="button" class="btn-marcar-pendencia" data-abrir-pendencia="${ficha.id}" data-tipo="${doc.tipo}">
-                  Marcar pendência / Exigir reenvio
-                </button>
+                <button type="button" class="btn-marcar-pendencia" data-abrir-pendencia="${ficha.id}" data-tipo="${doc.tipo}" title="Marcar pendência / Exigir reenvio">Exigir reenvio</button>
               </div>
               <form class="form-pendencia" data-form-pendencia="${ficha.id}:${doc.tipo}" hidden>
                 <textarea placeholder="Explique o que precisa ser corrigido/reenviado..." data-campo-justificativa required></textarea>
@@ -1685,7 +1685,6 @@
               <div class="acoes" role="group" aria-label="Ações de ${nome}">
                 <a class="btn-acao btn-documentos" href="rh.html#/candidato/${encodeURIComponent(f.id)}/documentos" target="_blank" rel="noopener noreferrer"
                    aria-label="Documentos de ${nome} (abre em nova aba)">Documentos</a>
-                <button class="btn-acao btn-copiar-link" data-copiar-link="${id}" type="button">Copiar link</button>
               </div>
             </td>
           </tr>`;
@@ -1855,12 +1854,6 @@
       const btnImprimir = e.target.closest('[data-imprimir]');
       if (btnImprimir) {
         imprimirFicha(btnImprimir.dataset.imprimir);
-        return;
-      }
-
-      const btnCopiarLink = e.target.closest('[data-copiar-link]');
-      if (btnCopiarLink) {
-        copiarLinkCandidato(btnCopiarLink.dataset.copiarLink, btnCopiarLink);
         return;
       }
 
@@ -2954,7 +2947,6 @@
           ${selo}
         </div>
         <div class="pc-acoes" role="group" aria-label="Ações da ficha">
-          <button type="button" class="btn-acao btn-copiar-link" data-copiar-link="${id}">Copiar link da ficha</button>
           <button type="button" class="btn-acao btn-copiar-link" data-copiar-link-pagina="${id}">Copiar link desta página</button>
           ${f.status === 'CONTRATACAO_CONCLUIDA' ? `<button type="button" class="btn-acao btn-imprimir" data-imprimir="${id}">Imprimir/Gerar PDF da Ficha</button>` : ''}
           ${f.bancoTalentos ? `<button type="button" class="btn-acao btn-reativar" data-reativar="${id}">Reativar Candidato</button>` : ''}

@@ -58,6 +58,7 @@ async function iniciarAmbiente() {
     env: {
       ...process.env,
       ...extraPg(PORTA_APP),
+      NODE_OPTIONS: `--require "${path.join(__dirname, 'google-falso.js').split(path.sep).join('/')}"`, GOOGLE_CLIENT_ID: 'cliente-de-teste',
       VALIDAR_CPF: '1', RH_TESTE_ATIVO: '1', NODE_ENV: 'test', PORT: String(PORTA_APP), DIRETORIO_DADOS: pastaTemp,
       SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '',
       ARMAZENAMENTO_DRIVER: ARMAZENAMENTO_TESTE, SENHA_RH_TESTE: '', API_KEY_ADMISSOES: 'chave-api-de-teste-0123456789',
@@ -118,6 +119,7 @@ async function suite(BASE, urlFalso) {
     body: form || (body ? JSON.stringify(body) : undefined)
   });
   const sufixo = Date.now().toString(36);
+  const loginGoogle = async (email) => { const r = await req('POST', '/api/auth/google', { body: { credential: email } }); return { status: r.status, corpo: await r.json().catch(() => ({})) }; };
   const senhaOk = 'Senha-Teste-123';
   const ficha = (extra = {}) => Object.assign({
     nomeCompleto: 'Fulano de Tal', dataNascimento: '10/05/1990', cpf: '123.456.789-09', cep: '01310-930',
@@ -133,6 +135,16 @@ async function suite(BASE, urlFalso) {
     return (await (await req('POST', '/api/auth/ativar', { body: { token: r.tokenAtivacao } })).json()).token;
   };
 
+  // ---- Login com Google: só candidato, sem passar por verificação em duas etapas ----
+  const gMaster = await loginGoogle('master@exemplo.test');
+  t('google', 'Login com Google', 'Conta master não entra (nem é vinculada) pelo Google (403)', gMaster.status === 403 && !gMaster.corpo.token && !gMaster.corpo.mfaNecessario, `HTTP ${gMaster.status}`);
+  const gRh = await loginGoogle('rh@onboarding.local');
+  t('google', 'Login com Google', 'Conta de RH não entra pelo Google (403)', gRh.status === 403 && !gRh.corpo.token, `HTTP ${gRh.status}`);
+  const gNovo = await loginGoogle(`google${sufixo}@exemplo.test`);
+  t('google', 'Login com Google', 'Candidato novo entra direto: conta criada, sem código nem configuração de 2 etapas', gNovo.status === 200 && !!gNovo.corpo.token && gNovo.corpo.usuario.tipo === 'candidato' && !gNovo.corpo.mfaNecessario && !gNovo.corpo.mfaConfiguracaoObrigatoria, `HTTP ${gNovo.status} ${Object.keys(gNovo.corpo).join(',')}`);
+  const gDeNovo = await loginGoogle(`google${sufixo}@exemplo.test`);
+  t('google', 'Login com Google', 'Segundo acesso do mesmo candidato reaproveita a conta', gDeNovo.status === 200 && gDeNovo.corpo.usuario.id === gNovo.corpo.usuario.id, `HTTP ${gDeNovo.status}`);
+
   // ---- contas e fichas usadas pelos testes (antes dos testes de limite) ----
   const rh = (await (await req('POST', '/api/auth/login', { body: { email: 'rh@onboarding.local', senha: 'onboarding123' } })).json()).token;
   const dono = await novaConta(`dono${sufixo}@exemplo.test`);
@@ -140,6 +152,17 @@ async function suite(BASE, urlFalso) {
   const id = (await (await req('POST', '/api/candidato', { token: dono, body: ficha({ email: `dono${sufixo}@exemplo.test` }) })).json()).candidato.id;
   const up = await (await req('POST', `/api/candidato/${id}/documento`, { token: dono, form: pdfForm('identidade', '%PDF-1.4\nSIGILOSO\n%%EOF') })).json();
   const arquivo = up.candidato.documentos.identidade.arquivo;
+  // ---- Ficha própria: o candidato nunca depende de um id de link/histórico ----
+  const minhaDono = await req('GET', '/api/candidato/minha', { token: dono });
+  const minhaDonoCorpo = await minhaDono.json().catch(() => ({}));
+  t('ficha-propria', 'Ficha própria', 'O candidato abre a PRÓPRIA ficha por /api/candidato/minha', minhaDono.status === 200 && minhaDonoCorpo.id === id, `HTTP ${minhaDono.status}`);
+  const minhaOutro = await req('GET', '/api/candidato/minha', { token: outro });
+  t('ficha-propria', 'Ficha própria', 'Candidato sem ficha recebe 404 (e nunca a ficha de outra pessoa)', minhaOutro.status === 404, `HTTP ${minhaOutro.status}`);
+  const minhaRh = await req('GET', '/api/candidato/minha', { token: rh });
+  t('ficha-propria', 'Ficha própria', 'A equipe do RH não usa a rota da ficha própria (403)', minhaRh.status === 403, `HTTP ${minhaRh.status}`);
+  const htmlFicha = await (await fetch(BASE + '/ficha.html')).text();
+  t('ficha-propria', 'Ficha própria', 'A página do candidato carrega a ficha da própria conta (ignora id de outro candidato)', htmlFicha.includes('/candidato/minha') && htmlFicha.includes('pertence a outra conta') && htmlFicha.includes('entre com a conta do candidato'), '');
+
 
   // ---- 5.1 Portabilidade: todo acesso ao banco passa por db/repositorio.js ----
   const fontePrincipal = fs.readFileSync(path.join(RAIZ, 'index.js'), 'utf8');
@@ -213,6 +236,9 @@ async function suite(BASE, urlFalso) {
   const guardadas = ['master', 'rh-login', 'rh', 'admin', 'titulares', 'seguranca'];
   const htmlsGuarda = await Promise.all(guardadas.map(async (n) => [n, await (await fetch(BASE + '/' + n + '.html')).text()]));
   t('ux', 'Sessão prévia', 'Páginas com sessão escondem o conteúdo até confirmar a sessão (sem tela fantasma)', htmlsGuarda.every(([, h]) => h.includes('<script src="/sessao-previa.js" data-modo="') && h.includes('revelarPagina')), htmlsGuarda.filter(([, h]) => !h.includes('revelarPagina')).map(([n]) => n).join(','));
+  const comLibras = ['login', 'rh-login', 'master', 'rh', 'admin', 'titulares', 'seguranca', 'ficha'];
+  const htmlsLibras = await Promise.all(comLibras.map(async (n) => [n, await (await fetch(BASE + '/' + n + '.html')).text()]));
+  t('ux', 'VLibras', 'Todas as telas principais carregam o VLibras (Libras)', htmlsLibras.every(([, h]) => h.includes('vlibras-plugin.js') && h.includes('vw-access-button')), htmlsLibras.filter(([, h]) => !h.includes('vlibras-plugin.js')).map(([n]) => n).join(','));
   const sessaoPrevia = await (await fetch(BASE + '/sessao-previa.js')).text();
   t('ux', 'Sessão prévia', 'O script revela a página sozinho após o limite de tempo (nunca fica em branco)', sessaoPrevia.includes('setTimeout(window.revelarPagina'), '');
   t('lgpd', 'Rodapé legal', 'Telas de acesso trazem copyright, política de privacidade e termos de uso', ['login', 'rh-login', 'master'].every((n) => { const h = htmlsLegais.find(([x]) => x === n)[1]; return h.includes('data-rodape-legal') && h.includes('href="/politica-privacidade.html"') && h.includes('href="/termos-de-uso.html"') && /&copy;/.test(h); }), '');

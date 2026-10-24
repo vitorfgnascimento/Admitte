@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-papel.js"></script>
   <script src="/sessao-previa.js" data-modo="entrada"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -427,12 +428,11 @@
     const REGEX_DESTINO = /^\/(rh|admin)\.html(\?id=[\w-]+)?(#\/candidato\/[\w%-]+(\/documentos)?)?$/;
     const PAGINAS_POR_PAPEL = { rh: ['rh'], admin: ['rh', 'admin'] };
     function destinoPara(tipo) {
-      if (tipo === 'master') return '/master.html';
       const pedido = new URLSearchParams(window.location.search).get('destino') || '';
       const m = REGEX_DESTINO.exec(pedido);
       return m && (PAGINAS_POR_PAPEL[tipo] || []).includes(m[1]) ? pedido : '/rh.html';
     }
-    const ehEquipe = (tipo) => tipo === 'rh' || tipo === 'admin' || tipo === 'master';
+    const ehEquipe = (tipo) => tipo === 'rh' || tipo === 'admin';
 
     function encerrarSessaoNoServidor(token) {
       fetch(API + '/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(() => {});
@@ -580,5 +580,13 @@
       }
     });
   </script>
+  <div vw class="enabled">
+    <div vw-access-button class="active"></div>
+    <div vw-plugin-wrapper>
+      <div class="vw-plugin-top-wrapper"></div>
+    </div>
+  </div>
+  <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+  <script>if (window.VLibras) { new window.VLibras.Widget('https://vlibras.gov.br/app'); }</script>
 </body>
 </html>

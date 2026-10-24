@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-papel.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onboarding Digital - Entrar</title>
@@ -450,6 +451,12 @@
     }
 
     function concluirLogin(token, usuario, configurarMfa) {
+      // Esta é a entrada do candidato: contas de outras áreas têm o próprio login e não ficam logadas aqui.
+      if (usuario.tipo !== 'candidato') {
+        fetch(API + '/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(() => {});
+        mostrarErro('Esta é a entrada de candidatos. Use o acesso da sua área.');
+        return;
+      }
       localStorage.setItem('onboarding_token', token);
       localStorage.setItem('onboarding_usuario', JSON.stringify(usuario));
       mostrarSucesso('Tudo certo! Levando você para o seu espaço...');

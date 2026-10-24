@@ -12,6 +12,7 @@
     "teste:s3": "node scripts/teste-s3.js",
     "teste:email": "node scripts/teste-email.js",
     "limpar:demonstracao": "node scripts/limpar-demonstracao.js",
+    "excluir:conta": "node scripts/excluir-conta.js",
     "build": "echo \"Nenhum build necessario - aplicacao servida diretamente pelo Express (servidor, Docker ou funcao serverless).\""
   },
   "repository": {

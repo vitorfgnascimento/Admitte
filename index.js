@@ -1346,6 +1346,10 @@ app.post('/api/auth/google', async (req, res) => {
       };
       usuarios.push(usuario);
       await salvarUsuarios(usuarios);
+    } else if (usuario.tipo !== 'candidato') {
+      // O login com Google é só do candidato: contas da equipe (RH, administrador, master) entram
+      // pela área do RH, com senha e verificação em duas etapas. Nada é vinculado nem alterado.
+      return res.status(403).json({ erro: 'Este e-mail pertence a uma conta da equipe. Entre pela área do RH, com e-mail e senha.' });
     } else if (usuario.googleId && usuario.googleId !== payload.sub) {
       return res.status(401).json({ erro: 'Este e-mail já está vinculado a outra conta Google.' });
     } else {
@@ -2428,6 +2432,24 @@ app.patch('/api/rh/fichas/:id/status', exigirRh, async (req, res) => {
 // à própria ficha - via link com ?id= - e ver pendências, mensagens e decisão)
 // Exige login: o RH acessa qualquer ficha; o candidato, somente a própria.
 // ---------------------------------------------------------------------------
+// A ficha da PRÓPRIA conta do candidato: a página dele usa esta rota e nunca depende de um id vindo
+// de link ou de histórico, então ele não tem como cair na ficha de outra pessoa.
+app.get('/api/candidato/minha', autenticar, async (req, res) => {
+  try {
+    if (!req.usuario || req.usuario.tipo !== 'candidato') return res.status(403).json({ erro: 'Disponível apenas para candidatos.' });
+    const candidatos = await lerCandidatos();
+    const propria = candidatos
+      .filter((c) => usuarioEhDonoDaFicha(req.usuario, c))
+      .sort((a, b) => String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')))[0];
+    if (!propria) return res.status(404).json({ erro: 'Você ainda não enviou a ficha.' });
+    const [comFoto] = await comFotosDosCandidatos([propria]);
+    return res.status(200).json(comFoto);
+  } catch (erro) {
+    console.error('Falha ao buscar a ficha própria:', erro.message);
+    return res.status(500).json({ erro: 'Falha ao buscar a ficha.' });
+  }
+});
+
 app.get('/api/candidato/:id', autenticar, async (req, res) => {
   try {
     const candidatos = await lerCandidatos();

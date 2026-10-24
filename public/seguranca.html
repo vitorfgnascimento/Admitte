@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-papel.js"></script>
   <script src="/sessao-previa.js" data-modo="protegida"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -66,6 +67,8 @@
 
   <script>
     (function () {
+      var ehMaster = new URLSearchParams(window.location.search).get('conta') === 'master';
+      var paginaLogin = ehMaster ? '/master.html' : '/rh-login.html';
       var token = localStorage.getItem('onboarding_token');
       var aviso = document.getElementById('aviso');
       var $ = function (id) { return document.getElementById(id); };
@@ -75,10 +78,10 @@
         if (token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
         localStorage.removeItem('onboarding_token');
         localStorage.removeItem('onboarding_usuario');
-        window.location.href = '/rh-login.html';
+        window.location.href = paginaLogin;
       }
       $('btnSair').addEventListener('click', sair);
-      if (!token) { window.location.href = '/rh-login.html'; return; }
+      if (!token) { window.location.href = paginaLogin; return; }
 
       function chamar(metodo, caminho, dados) {
         return fetch(caminho, {
@@ -91,7 +94,7 @@
 
       function atualizar() {
         return chamar('GET', '/api/auth/mfa/status').then(function (r) {
-          if (!r.ok) { window.location.href = '/rh-login.html'; return; }
+          if (!r.ok) { window.location.href = paginaLogin; return; }
           var s = r.c;
           if (!s.disponivel) { window.location.href = '/ficha.html'; return; }
           if (window.revelarPagina) window.revelarPagina();
@@ -157,5 +160,13 @@
     })();
   </script>
   <script src="/rodape-legal.js" defer></script>
+  <div vw class="enabled">
+    <div vw-access-button class="active"></div>
+    <div vw-plugin-wrapper>
+      <div class="vw-plugin-top-wrapper"></div>
+    </div>
+  </div>
+  <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+  <script>if (window.VLibras) { new window.VLibras.Widget('https://vlibras.gov.br/app'); }</script>
 </body>
 </html>

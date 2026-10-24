@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-papel.js"></script>
   <script src="/sessao-previa.js" data-modo="entrada"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -258,7 +259,7 @@
         </a>
         <nav class="gc-nav" aria-label="Navegação">
           <div class="grupo-acess" data-acessibilidade-slot data-ouvir-ignorar></div>
-          <a class="gc-btn" href="/seguranca.html">Segurança da conta</a>
+          <a class="gc-btn" href="/seguranca.html?conta=master">Segurança da conta</a>
           <button type="button" class="gc-btn" id="btnSair">Sair</button>
         </nav>
       </div>
@@ -365,7 +366,7 @@
         }
         localStorage.setItem('onboarding_token', token);
         localStorage.setItem('onboarding_usuario', JSON.stringify(usuario));
-        if (configurarMfa) { window.location.href = '/seguranca.html'; return; }
+        if (configurarMfa) { window.location.href = '/seguranca.html?conta=master'; return; }
         mostrarPainel(token, usuario);
       }
 
@@ -425,5 +426,13 @@
       });
     })();
   </script>
+  <div vw class="enabled">
+    <div vw-access-button class="active"></div>
+    <div vw-plugin-wrapper>
+      <div class="vw-plugin-top-wrapper"></div>
+    </div>
+  </div>
+  <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+  <script>if (window.VLibras) { new window.VLibras.Widget('https://vlibras.gov.br/app'); }</script>
 </body>
 </html>
