@@ -34,24 +34,24 @@
         if (t) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }).catch(function () {});
         localStorage.removeItem('onboarding_token');
         localStorage.removeItem('onboarding_usuario');
-        window.location.href = '/';
+        window.location.href = '/rh-login.html';
       }
       document.getElementById('btnSair').addEventListener('click', sair);
 
       var token = localStorage.getItem('onboarding_token');
-      if (!token) { window.location.href = '/?destino=' + encodeURIComponent('/admin.html'); return; }
+      if (!token) { window.location.href = '/rh-login.html?destino=' + encodeURIComponent('/admin.html'); return; }
       fetch('/api/auth/sessao', { headers: { Authorization: 'Bearer ' + token } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (corpo) {
           if (!corpo || corpo.usuario.tipo !== 'admin') {
-            window.location.href = corpo ? '/rh.html' : '/';
+            window.location.href = corpo ? '/rh.html' : '/rh-login.html';
             return;
           }
           GestaoContas.montar(document.getElementById('areaGestao'), {
             base: '/api/admin/operadores', rotulo: 'operador', token: token, idLogado: corpo.usuario.id
           });
         })
-        .catch(function () { window.location.href = '/'; });
+        .catch(function () { window.location.href = '/rh-login.html'; });
     })();
   </script>
 </body>

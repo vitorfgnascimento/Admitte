@@ -933,7 +933,7 @@
       fetch(API + '/auth/logout', { method: 'POST', headers: cabecalhosRh() }).catch(() => {});
       localStorage.removeItem('onboarding_token');
       localStorage.removeItem('onboarding_usuario');
-      window.location.href = '/login.html';
+      window.location.href = '/rh-login.html';
     }
 
     // Nome do operador de RH logado (usado como nomeAutor ao enviar mensagens no chat).
@@ -951,15 +951,15 @@
 
     async function exigirSessaoRh() {
       const token = tokenSessaoRh();
-      if (!token) { window.location.href = '/login.html'; return false; }
+      if (!token) { window.location.href = '/rh-login.html'; return false; }
 
       try {
         const r = await fetch(API + '/auth/sessao', { headers: cabecalhosRh() });
-        if (!r.ok) { window.location.href = '/login.html'; return false; }
+        if (!r.ok) { window.location.href = '/rh-login.html'; return false; }
         const corpo = await r.json();
         if (corpo.usuario.tipo !== 'rh' && corpo.usuario.tipo !== 'admin') {
           alert('Acesso restrito à equipe de RH.');
-          window.location.href = '/login.html';
+          window.location.href = '/rh-login.html';
           return false;
         }
         papelUsuarioRh = corpo.usuario.tipo;
@@ -968,7 +968,7 @@
         renderizarSessaoRh();
         return true;
       } catch (erro) {
-        window.location.href = '/login.html';
+        window.location.href = '/rh-login.html';
         return false;
       }
     }
@@ -1623,7 +1623,7 @@
 
       try {
         const resposta = await fetch('/api/rh/fichas', { headers: cabecalhosRh() });
-        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/login.html'; return; }
+        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/rh-login.html'; return; }
         const todasAsFichas = await resposta.json();
 
         if (!Array.isArray(todasAsFichas)) {
@@ -2332,7 +2332,7 @@
           body: JSON.stringify({ etiquetas })
         });
         const resultado = await resposta.json().catch(() => ({}));
-        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/login.html'; return; }
+        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/rh-login.html'; return; }
         if (!resposta.ok) {
           erroEl.textContent = resultado.erro || 'Não foi possível mover o candidato.';
           erroEl.hidden = false;
@@ -2455,7 +2455,7 @@
         body: corpo ? JSON.stringify(corpo) : undefined
       });
       const dados = await resposta.json().catch(() => ({}));
-      if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/login.html'; throw new Error('Sessão expirada.'); }
+      if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/rh-login.html'; throw new Error('Sessão expirada.'); }
       if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível concluir a operação.');
       return dados;
     }
@@ -3152,7 +3152,7 @@
       try {
         const resposta = await fetch(`/api/rh/fichas/${id}/reativar`, { method: 'PATCH', headers: cabecalhosRh() });
         const resultado = await resposta.json().catch(() => ({}));
-        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/login.html'; return; }
+        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/rh-login.html'; return; }
         if (!resposta.ok) {
           mostrarFeedback(resultado.erro || 'Não foi possível reativar o candidato.', 'erro');
           botao.disabled = false;
@@ -3353,7 +3353,7 @@
           })
         });
         const resultado = await resposta.json().catch(() => ({}));
-        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/login.html'; return; }
+        if (resposta.status === 401 || resposta.status === 403) { window.location.href = '/rh-login.html'; return; }
         if (!resposta.ok) {
           erroGeral.textContent = resultado.erro || 'Não foi possível salvar as configurações.';
           erroGeral.hidden = false;

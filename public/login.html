@@ -173,6 +173,9 @@
       text-decoration: none;
     }
     .link-voltar:hover { text-decoration: underline; }
+    .link-equipe { margin: 0.25rem 0 0; font-size: 0.9375rem; color: var(--tinta-2); }
+    .link-equipe a { color: var(--verde-texto); font-weight: 600; text-decoration: underline; }
+    .link-equipe a:hover { color: var(--floresta); }
 
     /* --- MODAL DE ATIVAÇÃO (simulação do e-mail) --- */
     .modal-fundo {
@@ -313,8 +316,6 @@
           </div>
           <button type="submit" class="btn btn-primario">Entrar</button>
           <button type="button" class="btn-link-senha" id="btnEsqueciSenha">Esqueci minha senha</button>
-          <!-- Acesso rápido do RH de testes: só aparece em localhost (ambiente de desenvolvimento). -->
-          <button type="button" class="btn btn-secundario" id="btnAcessoRapidoRh" hidden>Entrar como RH (teste)</button>
         </form>
 
         <!-- SEGUNDA ETAPA: verificação em duas etapas (aparece só para contas com MFA) -->
@@ -359,7 +360,7 @@
           <button type="submit" class="btn btn-primario" id="btnCriarConta">Criar Conta</button>
         </form>
 
-        <div class="separador">ou</div>
+        <div class="separador" id="separadorGoogle">ou</div>
 
         <!-- ENTRAR COM O GOOGLE (Google Identity Services) -->
         <div id="areaGoogle"></div>
@@ -369,6 +370,7 @@
         <div class="mensagem-sucesso" id="mensagemSucesso" role="status"></div>
 
         <a class="link-voltar" href="/ficha.html"><svg class="ic" aria-hidden="true"><use href="#i-seta-esq"/></svg>Voltar para a Ficha do Candidato</a>
+        <p class="link-equipe">Faz parte da equipe de RH? <a href="/rh-login.html">Acessar a área do RH</a></p>
       </div>
     </section>
   </main>
@@ -660,21 +662,6 @@
       }
     });
 
-    // Acesso rápido do RH de testes (rh@onboarding.local, senha pública do README):
-    // preenche os campos e envia o mesmo formulário de login. Só existe em
-    // localhost/127.0.0.1 - em qualquer outro endereço o botão continua oculto.
-    (function () {
-      const hosts = ['localhost', '127.0.0.1', '[::1]'];
-      if (!hosts.includes(window.location.hostname)) return;
-      const botao = document.getElementById('btnAcessoRapidoRh');
-      botao.hidden = false;
-      botao.addEventListener('click', () => {
-        document.getElementById('loginEmail').value = 'rh@onboarding.local';
-        document.getElementById('loginSenha').value = 'onboarding123';
-        formEntrar.requestSubmit();
-      });
-    })();
-
     // O consentimento LGPD do cadastro (Momento 1) é dado ao continuar: a frase e
     // o link "Termos de privacidade" ficam ao lado do botão, e o servidor registra
     // o aceite (data/hora, IP e versão dos termos) ao criar a conta.
@@ -718,11 +705,12 @@
     // =========================================================================
     function mostrarGoogleIndisponivel(detalhe) {
       console.info('Login com Google desativado:', detalhe, '(defina GOOGLE_CLIENT_ID no ambiente; ver README).');
-      const area = document.getElementById('areaGoogle');
-      if (area.querySelector('button')) return;
-      area.innerHTML = '<button type="button" class="btn btn-secundario" disabled aria-describedby="avisoGoogle">'
-        + '<svg class="ic" aria-hidden="true"><use href="#i-pessoa"/></svg>Entrar com o Google</button>';
-      document.getElementById('avisoGoogle').style.display = 'block';
+      // Sem Google configurado, a opção some por inteiro (separador "ou" incluído):
+      // um botão desabilitado passaria a impressão de recurso quebrado.
+      document.getElementById('areaGoogle').style.display = 'none';
+      document.getElementById('avisoGoogle').style.display = 'none';
+      const separador = document.getElementById('separadorGoogle');
+      if (separador) separador.style.display = 'none';
     }
 
     async function respostaCredencialGoogle(resposta) {

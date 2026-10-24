@@ -181,6 +181,18 @@ async function suite(BASE, urlFalso) {
   t('6.7', 'Termos de Uso', 'Política de Privacidade e pop-up apontam para os Termos de Uso', (await (await fetch(BASE + '/politica-privacidade.html')).text()).includes('/termos-de-uso.html') && (await (await fetch(BASE + '/termos-privacidade.js')).text()).includes('/termos-de-uso.html'), '');
   t('6.7', 'Marca', 'O logo da marca vira o favicon das páginas', htmlLogin.includes('<link rel="icon" href="/marca/logo.png">') && htmlTermos.includes('<link rel="icon" href="/marca/logo.png">'), '');
 
+  // ---- Login próprio da equipe de RH (/rh-login.html) ----
+  const htmlRhLogin = await (await fetch(BASE + '/rh-login.html')).text();
+  t('rh-login', 'Login do RH', 'Página própria do RH com a marca, e-mail, senha e etapa de MFA', htmlRhLogin.includes('<title>Área do RH - Admitte</title>') && !htmlRhLogin.includes('Onboarding Digital') && htmlRhLogin.includes('id="formEntrar"') && htmlRhLogin.includes('id="formMfa"') && /name="robots" content="noindex/.test(htmlRhLogin), '');
+  t('rh-login', 'Login do RH', 'Sem cadastro e sem login com Google (contas de RH são criadas pelo administrador)', !htmlRhLogin.includes('formCriarConta') && !htmlRhLogin.includes('accounts.google.com'), '');
+  t('rh-login', 'Login do RH', 'Link para o acesso do candidato e logo/favicon da marca', htmlRhLogin.includes('href="/"') && htmlRhLogin.includes('<img class="ic ic-logo" src="/marca/logo.png"') && htmlRhLogin.includes('<link rel="icon" href="/marca/logo.png">'), '');
+  const atalhoRh = await fetch(BASE + '/rh', { redirect: 'manual' });
+  t('rh-login', 'Login do RH', '/rh leva ao login do RH (302)', atalhoRh.status === 302 && atalhoRh.headers.get('location') === '/rh-login.html', `${atalhoRh.status} ${atalhoRh.headers.get('location')}`);
+  t('rh-login', 'Login do RH', 'O botão "Entrar como RH (teste)" saiu da tela do candidato, que aponta para a área do RH', !htmlLogin.includes('btnAcessoRapidoRh') && !htmlLogin.includes('Entrar como RH') && htmlLogin.includes('href="/rh-login.html"'), '');
+  const paginasEquipe = await Promise.all(['rh.html', 'admin.html', 'titulares.html', 'seguranca.html'].map(async (p) => [p, await (await fetch(`${BASE}/${p}`)).text()]));
+  t('rh-login', 'Login do candidato', 'Sem Google configurado a opção some por inteiro (sem botão desabilitado)', htmlLogin.includes('id="separadorGoogle"') && !htmlLogin.includes('disabled aria-describedby="avisoGoogle"'), '');
+  t('rh-login', 'Login do RH', 'Painéis da equipe mandam para o login do RH quando não há sessão', paginasEquipe.every(([, h]) => h.includes('/rh-login.html')), paginasEquipe.filter(([, h]) => !h.includes('/rh-login.html')).map(([p]) => p).join(','));
+
   // ---- 2.1 Cabeçalhos ----
   const h = (await req('GET', '/login.html')).headers;
   t('2.1', 'Cabeçalhos', 'Content-Security-Policy com frame-ancestors e object-src none', /frame-ancestors/.test(h.get('content-security-policy') || '') && /object-src 'none'/.test(h.get('content-security-policy') || ''), h.get('content-security-policy') ? 'presente' : 'ausente');
@@ -569,6 +581,8 @@ async function suiteProducao(BASE, BASE_APP) {
   const htmlMarca = await (await fetch(BASE + '/login.html')).text();
   t('5.2', 'Produção', 'Nome da marca do cliente aparece escapado (sem HTML injetado)', htmlMarca.includes('Acme &lt;b&gt;RH') && !htmlMarca.includes('Acme <b>RH'), '');
   t('5.2', 'Produção', 'Logo do cliente substitui o ícone padrão nas telas', htmlMarca.includes('<img class="ic ic-logo" src="https://cdn.exemplo.test/logo.svg"') && !htmlMarca.includes('<use href="#i-logo"/></svg>\n        <span>'), '');
+  const htmlRhMarca = await (await fetch(BASE + '/rh-login.html')).text();
+  t('rh-login', 'Produção', 'Login do RH usa a marca do cliente, escapada, e o logo configurado', htmlRhMarca.includes('Acme &lt;b&gt;RH') && !htmlRhMarca.includes('Acme <b>RH') && htmlRhMarca.includes('<img class="ic ic-logo" src="https://cdn.exemplo.test/logo.svg"'), '');
   t('6.7', 'Produção', 'Favicon do cliente usa o logo configurado (https)', htmlMarca.includes('<link rel="icon" href="https://cdn.exemplo.test/logo.svg">'), '');
   t('5.2', 'Produção', 'Cor da marca é injetada como variável de tema', htmlMarca.includes('<style id="marca-cores">:root { --verde: #1E40AF'), '');
   const marcaProd = await (await fetch(BASE + '/api/marca')).json();

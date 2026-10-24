@@ -78,6 +78,9 @@ app.use(express.json({ limit: '400kb' }));
 const MARCA = marca.carregar();
 app.get('/api/marca', (req, res) => res.status(200).json(MARCA.publico()));
 
+// Atalho para a entrada da equipe de RH (útil em apresentações e links).
+app.get('/rh', (req, res) => res.redirect(302, '/rh-login.html'));
+
 // Compatibilidade: o antigo /index.html (ficha do candidato) agora é /ficha.html.
 // Links já enviados (ex.: "?id=...") continuam funcionando.
 app.get('/index.html', (req, res) => {

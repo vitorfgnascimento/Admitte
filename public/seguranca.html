@@ -74,10 +74,10 @@
         if (token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
         localStorage.removeItem('onboarding_token');
         localStorage.removeItem('onboarding_usuario');
-        window.location.href = '/';
+        window.location.href = '/rh-login.html';
       }
       $('btnSair').addEventListener('click', sair);
-      if (!token) { window.location.href = '/'; return; }
+      if (!token) { window.location.href = '/rh-login.html'; return; }
 
       function chamar(metodo, caminho, dados) {
         return fetch(caminho, {
@@ -90,7 +90,7 @@
 
       function atualizar() {
         return chamar('GET', '/api/auth/mfa/status').then(function (r) {
-          if (!r.ok) { window.location.href = '/'; return; }
+          if (!r.ok) { window.location.href = '/rh-login.html'; return; }
           var s = r.c;
           if (!s.disponivel) { window.location.href = '/ficha.html'; return; }
           $('blocoConfigurar').hidden = true;

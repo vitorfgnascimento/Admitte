@@ -16,7 +16,8 @@ O MVP é dividido em dois módulos, servidos pelo mesmo backend Express e comuni
 
 ```
 public/
-  login.html    -> Autenticação: entrar, criar conta, entrar com o Google
+  login.html    -> Entrada do candidato (raiz "/"): entrar, criar conta, entrar com o Google (a opção some se o Google não estiver configurado)
+  rh-login.html -> Entrada da equipe de RH (atalho "/rh"): e-mail, senha e verificação em duas etapas; sem cadastro público
   ficha.html    -> Módulo Candidato: ficha de admissão, upload de documentos, chat, banner de decisão, aceite de contrato
   rh.html       -> Módulo RH: painel de gestão, pendências, decisão final, contrato, exportação e impressão (acesso restrito)
   testes.html   -> bateria de testes automatizados contra a API em execução
@@ -147,6 +148,8 @@ Módulo de Autenticação e Contratação:
 - **Painel do RH protegido** - `public/rh.html` exige sessão do tipo `rh`; sem ela, redireciona para o login. As rotas `/api/rh/*` exigem o mesmo token no backend.
 - **Aceite Virtual de Contratos por Clique (Assinatura Eletrônica Simples)** - liberado para fichas com status `APROVADO`: lista de documentos (Contrato de Trabalho, Termo de Confidencialidade, Política de Privacidade/LGPD), cada um com download da minuta e um botão "Li e Aceito os Termos" próprio. O botão unificado "Concluir Assinatura Digital" só libera quando todos os documentos forem aceitos, e grava timestamp ISO, IP, CPF e um hash SHA-256 das minutas na auditoria. O Painel do RH ganha o card "Contrato de Trabalho - Aceite Digital" (mesmo layout dos cards de documento) com o botão "Validar Contratação", que move o status para o estado terminal `CONTRATACAO_CONCLUIDA`.
 
+> **Entrada da equipe:** o RH, os administradores e a master entram por `/rh-login.html` (atalho `/rh`), uma página própria no mesmo design da entrada do candidato; contas de RH são criadas pelo administrador da empresa e não há cadastro público nem login com Google nessa tela. Se um candidato tentar entrar por ali, a sessão é encerrada com um aviso e um link para o acesso dele. Os painéis da equipe (`rh.html`, `admin.html`, `titulares.html`, `seguranca.html`) mandam para essa página quando não há sessão.
+>
 > **Conta de RH de testes:** semeada de forma idempotente no boot do servidor (não recriada se já existir) - `rh@onboarding.local` / `onboarding123`. A senha é pública de propósito, para que qualquer pessoa consiga testar a aplicação; para usar outra, defina `SENHA_RH_TESTE` no ambiente (vale também para uma conta de RH já existente, após reiniciar). O formulário público de registro sempre cria contas do tipo `candidato`.
 
 ## Funcionalidades adicionais do painel do RH

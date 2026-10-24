@@ -57,10 +57,10 @@
         if (token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
         localStorage.removeItem('onboarding_token');
         localStorage.removeItem('onboarding_usuario');
-        window.location.href = '/';
+        window.location.href = '/rh-login.html';
       }
       document.getElementById('btnSair').addEventListener('click', sair);
-      if (!token) { window.location.href = '/'; return; }
+      if (!token) { window.location.href = '/rh-login.html'; return; }
 
       function chamar(metodo, caminho, dados) {
         return fetch(caminho, {
@@ -153,7 +153,7 @@
           document.getElementById('blocoRetencao').hidden = papel !== 'admin';
           carregar();
         })
-        .catch(function () { window.location.href = '/'; });
+        .catch(function () { window.location.href = '/rh-login.html'; });
     })();
   </script>
 </body>
