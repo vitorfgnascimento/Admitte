@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-previa.js" data-modo="protegida"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
@@ -150,6 +151,7 @@
         .then(function (c) {
           if (!c || (c.usuario.tipo !== 'rh' && c.usuario.tipo !== 'admin')) { window.location.href = c ? '/ficha.html' : '/'; return; }
           papel = c.usuario.tipo;
+          if (window.revelarPagina) window.revelarPagina();
           document.getElementById('blocoRetencao').hidden = papel !== 'admin';
           carregar();
         })

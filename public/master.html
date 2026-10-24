@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-previa.js" data-modo="entrada"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
@@ -329,7 +330,8 @@
         fetch(API + '/auth/sessao', { headers: { Authorization: 'Bearer ' + tokenSalvo } })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (c) { if (c && c.usuario.tipo === 'master') mostrarPainel(tokenSalvo, c.usuario); })
-          .catch(function () {});
+          .catch(function () {})
+          .then(function () { window.revelarPagina && window.revelarPagina(); });
       }
 
       // Mostrar / ocultar senha (oculta por padrão)

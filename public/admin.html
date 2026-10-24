@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-previa.js" data-modo="protegida"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Equipe do RH - Onboarding Digital</title>
@@ -74,6 +75,7 @@
             window.location.href = corpo ? '/rh.html' : '/rh-login.html';
             return;
           }
+          if (window.revelarPagina) window.revelarPagina();
           GestaoContas.montar(document.getElementById('areaGestao'), {
             base: '/api/admin/operadores', rotulo: 'operador', token: token, idLogado: corpo.usuario.id,
             aoCarregar: function (lista) {

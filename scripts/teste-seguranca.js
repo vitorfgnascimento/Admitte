@@ -210,6 +210,11 @@ async function suite(BASE, urlFalso) {
   const paginasLegais = ['login', 'rh-login', 'master', 'ficha', 'rh', 'admin', 'titulares', 'seguranca', 'recuperar-senha', 'politica-privacidade', 'termos-de-uso'];
   const htmlsLegais = await Promise.all(paginasLegais.map(async (n) => [n, await (await fetch(BASE + '/' + n + '.html')).text()]));
   t('lgpd', 'Rodapé legal', 'Todas as páginas carregam o rodapé legal com pop-up', htmlsLegais.every(([, h]) => h.includes('/rodape-legal.js')), htmlsLegais.filter(([, h]) => !h.includes('/rodape-legal.js')).map(([n]) => n).join(','));
+  const guardadas = ['master', 'rh-login', 'rh', 'admin', 'titulares', 'seguranca'];
+  const htmlsGuarda = await Promise.all(guardadas.map(async (n) => [n, await (await fetch(BASE + '/' + n + '.html')).text()]));
+  t('ux', 'Sessão prévia', 'Páginas com sessão escondem o conteúdo até confirmar a sessão (sem tela fantasma)', htmlsGuarda.every(([, h]) => h.includes('<script src="/sessao-previa.js" data-modo="') && h.includes('revelarPagina')), htmlsGuarda.filter(([, h]) => !h.includes('revelarPagina')).map(([n]) => n).join(','));
+  const sessaoPrevia = await (await fetch(BASE + '/sessao-previa.js')).text();
+  t('ux', 'Sessão prévia', 'O script revela a página sozinho após o limite de tempo (nunca fica em branco)', sessaoPrevia.includes('setTimeout(window.revelarPagina'), '');
   t('lgpd', 'Rodapé legal', 'Telas de acesso trazem copyright, política de privacidade e termos de uso', ['login', 'rh-login', 'master'].every((n) => { const h = htmlsLegais.find(([x]) => x === n)[1]; return h.includes('data-rodape-legal') && h.includes('href="/politica-privacidade.html"') && h.includes('href="/termos-de-uso.html"') && /&copy;/.test(h); }), '');
   const scriptRodape = await (await fetch(BASE + '/rodape-legal.js')).text();
   t('lgpd', 'Rodapé legal', 'O script abre os termos num pop-up (iframe embutido) e fecha com Esc', scriptRodape.includes('embed') && scriptRodape.includes('legal-fundo') && scriptRodape.includes("'Escape'"), '');

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-previa.js" data-modo="entrada"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
@@ -456,12 +457,14 @@
     (async function () {
       const salvo = localStorage.getItem('onboarding_token');
       if (!salvo) return;
+      let redirecionando = false;
       try {
         const r = await fetch(API + '/auth/sessao', { headers: { Authorization: 'Bearer ' + salvo } });
         if (!r.ok) return;
         const { usuario } = await r.json();
-        if (ehEquipe(usuario.tipo)) window.location.replace(destinoPara(usuario.tipo));
+        if (ehEquipe(usuario.tipo)) { redirecionando = true; window.location.replace(destinoPara(usuario.tipo)); }
       } catch (e) { /* segue na tela de login */ }
+      finally { if (!redirecionando && window.revelarPagina) window.revelarPagina(); }
     })();
 
     // Mostrar / ocultar senha (oculta por padrão)

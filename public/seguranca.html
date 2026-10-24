@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-previa.js" data-modo="protegida"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
@@ -93,6 +94,7 @@
           if (!r.ok) { window.location.href = '/rh-login.html'; return; }
           var s = r.c;
           if (!s.disponivel) { window.location.href = '/ficha.html'; return; }
+          if (window.revelarPagina) window.revelarPagina();
           $('blocoConfigurar').hidden = true;
           $('btnConfigurar').hidden = s.ativo;
           $('blocoDesativar').hidden = !s.ativo || s.obrigatorio;

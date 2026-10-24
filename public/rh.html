@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script src="/sessao-previa.js" data-modo="protegida"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onboarding Digital - Painel do RH</title>
@@ -3380,6 +3381,7 @@
 
     exigirSessaoRh().then((autorizado) => {
       if (!autorizado) return;
+      if (window.revelarPagina) window.revelarPagina();
       carregarConfiguracoes();
       carregarEtiquetas();
       carregarFichas();
