@@ -1,4 +1,4 @@
-# OnboardingDigital
+# Admitte
 
 **Status do Projeto:** MVP em Desenvolvimento Ativo. Etapa 1 (Jornada e Ficha do Candidato) Concluída. Etapa 2 (Módulo do RH) Concluída. Etapa 3 (Documentação, LGPD e Preparação para Deploy) em consolidação. Etapa 4 (Autenticação e Contratação) em consolidação.
 
@@ -150,6 +150,8 @@ Módulo de Autenticação e Contratação:
 
 > **Entrada da equipe:** o RH, os administradores e a master entram por `/rh-login.html` (atalho `/rh`), uma página própria no mesmo design da entrada do candidato; contas de RH são criadas pelo administrador da empresa e não há cadastro público nem login com Google nessa tela. Se um candidato tentar entrar por ali, a sessão é encerrada com um aviso e um link para o acesso dele. Os painéis da equipe (`rh.html`, `admin.html`, `titulares.html`, `seguranca.html`) mandam para essa página quando não há sessão.
 >
+> **Zerar o banco para uma gravação:** `npm run limpar:demonstracao` mostra o que seria apagado (nada é alterado); `npm run limpar:demonstracao -- --confirmar` apaga, de forma definitiva, todas as fichas (com PDFs e chat), pedidos de titulares e contas de candidato, RH e administrador. A conta **master** e a trilha de auditoria são preservadas. Age no banco do `.env` (se for o da produção, vale para a produção).
+
 > **Conta de RH de testes:** semeada de forma idempotente no boot do servidor (não recriada se já existir) - `rh@onboarding.local` / `onboarding123`. A senha é pública de propósito, para que qualquer pessoa consiga testar a aplicação; para usar outra, defina `SENHA_RH_TESTE` no ambiente (vale também para uma conta de RH já existente, após reiniciar). O formulário público de registro sempre cria contas do tipo `candidato`.
 
 ## Funcionalidades adicionais do painel do RH
@@ -226,8 +228,8 @@ Recursos incluídos depois das Etapas 1 a 4 (cobertos pelas migrações em `supa
 ### Clonar o repositório
 
 ```bash
-git clone https://github.com/vitorfgnascimento/OnboardingDigital.git
-cd OnboardingDigital
+git clone https://github.com/vitorfgnascimento/Admitte.git
+cd Admitte
 ```
 
 ### Variáveis de ambiente (opcional)
@@ -248,6 +250,8 @@ cp .env.example .env
 | `ARMAZENAMENTO_BUCKET` | `documentos` | Nome do bucket privado, quando o driver é `supabase`. |
 | `SUPABASE_SERVICE_KEY` | *(vazia)* | Chave secret/service_role, só no servidor, usada pelo driver `supabase`. |
 | `ARQUIVOS_SEGREDO` | *(deriva da chave do Supabase)* | Segredo (16+ caracteres) que assina as URLs de acesso aos PDFs. |
+| `RH_TESTE_ATIVO` | ligado | `0` não recria a conta de RH de demonstração a cada boot (use ao gravar a tela ou quando não quiser conta pública). |
+| `VALIDAR_CPF` | ligado | `0` desliga a conferência dos dígitos do CPF (modo demonstração; continua exigindo 11 números). **Religue depois da gravação.** |
 | `SENHA_RH_TESTE` | `onboarding123` | Senha da conta de RH de testes `rh@onboarding.local`. Opcional: define outra senha (e a aplica a uma conta já existente ao reiniciar). |
 | `PORT` | `3001` | Porta em que o servidor escuta. Injetada automaticamente por plataformas de deploy em nuvem (Render, Railway, etc.). |
 | `GOOGLE_CLIENT_ID` | *(vazio)* | Client ID OAuth 2.0 do Google (Google Cloud Console), necessário para o botão "Entrar com o Google" funcionar de verdade. Sem ela, o botão fica desabilitado e a rota `/api/auth/google` responde 400. |

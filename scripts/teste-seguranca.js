@@ -18,10 +18,13 @@ const RAIZ = path.join(__dirname, '..');
 const PORTA_FALSO = 54330;
 const PORTA_APP = 3010;
 const PORTA_PROD = 3011;
+const PORTA_DEMO = 3012;
 const POSTGRES = process.env.TESTE_DRIVER === 'postgres';
 // TESTE_ARMAZENAMENTO=s3 roda a bateria com os PDFs em um servidor S3 (S3_* no ambiente).
 const ARMAZENAMENTO_TESTE = process.env.TESTE_ARMAZENAMENTO === 's3' ? 's3' : 'local';
 let BASE_PROD = null;
+let BASE_DEMO = null;
+let ENV_FALSO = null;
 const processos = [];
 let pastaTemp = null;
 
@@ -55,7 +58,7 @@ async function iniciarAmbiente() {
     env: {
       ...process.env,
       ...extraPg(PORTA_APP),
-      NODE_ENV: 'test', PORT: String(PORTA_APP), DIRETORIO_DADOS: pastaTemp,
+      VALIDAR_CPF: '1', RH_TESTE_ATIVO: '1', NODE_ENV: 'test', PORT: String(PORTA_APP), DIRETORIO_DADOS: pastaTemp,
       SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '',
       ARMAZENAMENTO_DRIVER: ARMAZENAMENTO_TESTE, SENHA_RH_TESTE: '', API_KEY_ADMISSOES: 'chave-api-de-teste-0123456789',
       MASTER_EMAIL: 'master@exemplo.test', MASTER_SENHA: 'Master-Senha-Forte-123',
@@ -73,7 +76,7 @@ async function iniciarAmbiente() {
     env: {
       ...process.env,
       ...extraPg(PORTA_PROD),
-      NODE_ENV: 'production', DIRETORIO_DADOS: pastaTemp, MFA_OBRIGATORIO: '1', API_KEY_ADMISSOES: '', LIMITE_CADASTROS_HORA: '1000', LIMITE_RECUPERACOES_IP_HORA: '1000',
+      VALIDAR_CPF: '1', RH_TESTE_ATIVO: '1', NODE_ENV: 'production', DIRETORIO_DADOS: pastaTemp, MFA_OBRIGATORIO: '1', API_KEY_ADMISSOES: '', LIMITE_CADASTROS_HORA: '1000', LIMITE_RECUPERACOES_IP_HORA: '1000',
       MARCA_NOME: 'Acme <b>RH', MARCA_LOGO_URL: 'https://cdn.exemplo.test/logo.svg', MARCA_COR: '#1E40AF',
       SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '',
       ARMAZENAMENTO_DRIVER: 'local', SENHA_RH_TESTE: '', MASTER_EMAIL: '', MASTER_SENHA: ''
@@ -83,6 +86,22 @@ async function iniciarAmbiente() {
   processos.push(prod);
   await aguardar(`http://localhost:${PORTA_PROD}/login.html`);
   BASE_PROD = `http://localhost:${PORTA_PROD}`;
+
+  // Terceira instância, em MODO GRAVAÇÃO (VALIDAR_CPF=0 e sem a conta de RH de demonstração).
+  const demo = spawn(process.execPath, argumentosProd.map((a) => a.replace(String(PORTA_PROD), String(PORTA_DEMO))), {
+    cwd: RAIZ,
+    env: {
+      ...process.env, ...extraPg(PORTA_DEMO),
+      NODE_ENV: 'production', DIRETORIO_DADOS: pastaTemp, API_KEY_ADMISSOES: '', LIMITE_CADASTROS_HORA: '1000',
+      SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '',
+      ARMAZENAMENTO_DRIVER: 'local', SENHA_RH_TESTE: '', MASTER_EMAIL: '', MASTER_SENHA: '', VALIDAR_CPF: '0', RH_TESTE_ATIVO: '0'
+    },
+    stdio: 'ignore'
+  });
+  processos.push(demo);
+  await aguardar(`http://localhost:${PORTA_DEMO}/login.html`);
+  BASE_DEMO = `http://localhost:${PORTA_DEMO}`;
+  ENV_FALSO = { ...process.env, BANCO_DRIVER: '', DATABASE_URL: '', NODE_ENV: 'test', DIRETORIO_DADOS: pastaTemp, SUPABASE_URL: `http://127.0.0.1:${PORTA_FALSO}`, SUPABASE_KEY: 'chave-de-teste', SUPABASE_SERVICE_KEY: '', ARMAZENAMENTO_DRIVER: 'local', MASTER_EMAIL: 'master@exemplo.test', MASTER_SENHA: 'Master-Senha-Forte-123' };
   return `http://localhost:${PORTA_APP}`;
 }
 
@@ -188,7 +207,7 @@ async function suite(BASE, urlFalso) {
   t('rh-login', 'Login do RH', 'Link para o acesso do candidato e logo/favicon da marca', htmlRhLogin.includes('href="/"') && htmlRhLogin.includes('<img class="ic ic-logo" src="/marca/logo.png"') && htmlRhLogin.includes('<link rel="icon" href="/marca/logo.png">'), '');
   const atalhoRh = await fetch(BASE + '/rh', { redirect: 'manual' });
   t('rh-login', 'Login do RH', '/rh leva ao login do RH (302)', atalhoRh.status === 302 && atalhoRh.headers.get('location') === '/rh-login.html', `${atalhoRh.status} ${atalhoRh.headers.get('location')}`);
-  t('rh-login', 'Login do RH', 'O botão "Entrar como RH (teste)" saiu da tela do candidato, que aponta para a área do RH', !htmlLogin.includes('btnAcessoRapidoRh') && !htmlLogin.includes('Entrar como RH') && htmlLogin.includes('href="/rh-login.html"'), '');
+  t('rh-login', 'Login do RH', 'A tela do candidato não tem botão nem link para o login do RH (porta separada)', !htmlLogin.includes('btnAcessoRapidoRh') && !htmlLogin.includes('Entrar como RH') && !htmlLogin.includes('rh-login'), '');
   const paginasEquipe = await Promise.all(['rh.html', 'admin.html', 'titulares.html', 'seguranca.html'].map(async (p) => [p, await (await fetch(`${BASE}/${p}`)).text()]));
   t('rh-login', 'Login do candidato', 'Sem Google configurado a opção some por inteiro (sem botão desabilitado)', htmlLogin.includes('id="separadorGoogle"') && !htmlLogin.includes('disabled aria-describedby="avisoGoogle"'), '');
   t('rh-login', 'Login do RH', 'Painéis da equipe mandam para o login do RH quando não há sessão', paginasEquipe.every(([, h]) => h.includes('/rh-login.html')), paginasEquipe.filter(([, h]) => !h.includes('/rh-login.html')).map(([p]) => p).join(','));
@@ -614,6 +633,32 @@ async function suiteProducao(BASE, BASE_APP) {
   const h = (await fetch(BASE + '/login.html')).headers;
   t('2.1', 'Produção', 'Cabeçalhos de segurança presentes em produção', !!h.get('content-security-policy') && h.get('x-content-type-options') === 'nosniff', '');
 }
+// Modo gravação: VALIDAR_CPF=0 aceita CPF sem conferir os dígitos (mas exige 11 números).
+async function suiteDemonstracao(BASE) {
+  const J = { 'Content-Type': 'application/json' };
+  const sufixo = Date.now().toString(36);
+  const dados = { nome: 'Pessoa Demo', senha: 'Senha-Teste-123', confirmarSenha: 'Senha-Teste-123', dataNascimento: '01/01/1990', aceiteTermos: true };
+  const reg = (email, cpf) => fetch(BASE + '/api/auth/registrar', { method: 'POST', headers: J, body: JSON.stringify({ ...dados, email, cpf }) });
+  t('demo', 'Modo gravação', 'VALIDAR_CPF=0: CPF com dígitos inválidos é aceito no cadastro', (await reg(`demo${sufixo}@exemplo.test`, '123.456.789-00')).status === 201, '');
+  t('demo', 'Modo gravação', 'VALIDAR_CPF=0: CPF com menos de 11 números continua recusado', (await reg(`demo2${sufixo}@exemplo.test`, '123.456.789')).status === 400, '');
+}
+
+// Script de limpeza (só no modo Supabase falso): simulação não apaga; --confirmar apaga tudo menos a master.
+async function suiteLimpeza(BASE) {
+  const { spawnSync } = require('child_process');
+  const J = { 'Content-Type': 'application/json' };
+  const rodar = (...args) => spawnSync(process.execPath, [path.join(__dirname, 'limpar-demonstracao.js'), ...args], { cwd: RAIZ, env: ENV_FALSO, encoding: 'utf8' });
+  const entrar = async (email, senha) => (await fetch(BASE + '/api/auth/login', { method: 'POST', headers: J, body: JSON.stringify({ email, senha }) })).status;
+  const seco = rodar();
+  t('demo', 'Limpeza', 'Simulação mostra o banco falso (127.0.0.1) e não apaga nada', seco.status === 0 && /127.0.0.1/.test(seco.stdout) && /Nada foi apagado/.test(seco.stdout), (seco.stdout + seco.stderr).slice(0, 200));
+  t('demo', 'Limpeza', 'Após a simulação o RH ainda entra', await entrar('rh@onboarding.local', 'onboarding123') === 200, '');
+  const real = rodar('--confirmar');
+  t('demo', 'Limpeza', '--confirmar conclui sem erro', real.status === 0 && /Concluído/.test(real.stdout), (real.stdout + real.stderr).slice(-200));
+  t('demo', 'Limpeza', 'Após a limpeza só restam contas master', real.stdout.includes('Restam: 0 ficha(s) e 1 conta(s) (master)'), real.stdout.split(String.fromCharCode(10)).slice(-3).join(' | '));
+  t('demo', 'Limpeza', 'Conta de RH removida deixa de entrar (401)', await entrar('rh@onboarding.local', 'onboarding123') === 401, '');
+  t('demo', 'Limpeza', 'A master continua entrando', await entrar('master@exemplo.test', 'Master-Senha-Forte-123') === 200, '');
+}
+
 async function main() {
   let base = process.env.TESTE_BASE;
   try {
@@ -622,6 +667,8 @@ async function main() {
     // inspecionam as linhas do banco pelo PostgREST são pulados.
     await suite(base, process.env.TESTE_BASE || POSTGRES ? null : `http://127.0.0.1:${PORTA_FALSO}`);
     if (BASE_PROD) await suiteProducao(BASE_PROD, !POSTGRES && !process.env.TESTE_BASE ? base : null);
+    if (BASE_DEMO) await suiteDemonstracao(BASE_DEMO);
+    if (BASE_DEMO && !POSTGRES && !process.env.TESTE_BASE) await suiteLimpeza(base);
   } catch (erro) {
     console.error('ERRO ao executar a bateria:', erro.message);
     encerrarAmbiente();

@@ -1,5 +1,5 @@
 {
-  "name": "onboarding",
+  "name": "admitte",
   "version": "1.0.0",
   "description": "MVP de plataforma de Onboarding Digital (Admissão Digital de Funcionários)",
   "main": "index.js",
@@ -11,20 +11,21 @@
     "teste:postgres": "node scripts/teste-postgres.js",
     "teste:s3": "node scripts/teste-s3.js",
     "teste:email": "node scripts/teste-email.js",
+    "limpar:demonstracao": "node scripts/limpar-demonstracao.js",
     "build": "echo \"Nenhum build necessario - aplicacao servida diretamente pelo Express (servidor, Docker ou funcao serverless).\""
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vitorfgnascimento/OnboardingDigital.git"
+    "url": "git+https://github.com/vitorfgnascimento/Admitte.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/vitorfgnascimento/OnboardingDigital/issues"
+    "url": "https://github.com/vitorfgnascimento/Admitte/issues"
   },
-  "homepage": "https://github.com/vitorfgnascimento/OnboardingDigital#readme",
+  "homepage": "https://github.com/vitorfgnascimento/Admitte#readme",
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
     "bcryptjs": "^3.0.3",

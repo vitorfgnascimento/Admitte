@@ -222,10 +222,18 @@ function dataNascimentoValida(digitosData) {
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const REGEX_REPETICAO = /(.)\1{2,}/i;
 
+// VALIDAR_CPF=0 desliga SÓ a conferência dos dígitos verificadores (o CPF ainda precisa
+// ter 11 dígitos). Existe para gravações de demonstração com dados fictícios; em uso
+// real deixe ligada (padrão).
+const VALIDAR_DIGITOS_CPF = process.env.VALIDAR_CPF !== '0';
+if (!VALIDAR_DIGITOS_CPF) console.warn('AVISO: VALIDAR_CPF=0 - a conferência dos dígitos do CPF está DESLIGADA (modo demonstração).');
+
 // CPF válido: 11 dígitos, não todos iguais e com os dois dígitos verificadores corretos.
 function cpfValido(valor) {
   const d = somenteDigitos(valor);
-  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  if (d.length !== 11) return false;
+  if (!VALIDAR_DIGITOS_CPF) return true;
+  if (/^(\d)\1{10}$/.test(d)) return false;
   const digito = (n) => {
     let soma = 0;
     for (let i = 0; i < n; i += 1) soma += Number(d[i]) * (n + 1 - i);
@@ -4592,7 +4600,8 @@ async function garantirUsuarioRhTeste() {
 // importação do módulo pela Vercel nem pelo "node index.js" local.
 (async () => {
   try {
-    await garantirUsuarioRhTeste();
+    // RH_TESTE_ATIVO=0: não recria a conta pública de RH de demonstração (rh@onboarding.local).
+    if (process.env.RH_TESTE_ATIVO !== '0') await garantirUsuarioRhTeste();
     await garantirUsuarioMaster();
     // Remove sessões expiradas e as do formato antigo (token em texto puro).
     await limparSessoesAntigas();

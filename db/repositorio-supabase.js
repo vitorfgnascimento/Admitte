@@ -29,6 +29,9 @@ async function buscarCandidato(id) {
 async function gravarCandidatos(linhas) {
   resultado(await supabase.from('candidatos').upsert(linhas, { onConflict: 'id' }));
 }
+async function excluirCandidato(id) {
+  resultado(await supabase.from('candidatos').delete().eq('id', id));
+}
 async function atualizarCandidato(id, campos) {
   resultado(await supabase.from('candidatos').update(campos).eq('id', id));
 }
@@ -176,13 +179,16 @@ async function buscarSolicitacao(id) {
 async function inserirSolicitacao(linha) {
   resultado(await supabase.from('solicitacoes_titular').insert(linha));
 }
+async function excluirSolicitacao(id) {
+  resultado(await supabase.from('solicitacoes_titular').delete().eq('id', id));
+}
 async function atualizarSolicitacao(id, campos) {
   resultado(await supabase.from('solicitacoes_titular').update(campos).eq('id', id));
 }
 
 module.exports = {
   driver: 'supabase',
-  listarCandidatos, buscarCandidato, gravarCandidatos, atualizarCandidato, listarTagsDasFichas,
+  listarCandidatos, buscarCandidato, gravarCandidatos, atualizarCandidato, excluirCandidato, excluirSolicitacao, listarTagsDasFichas,
   listarMensagens, listarMensagensDaFicha, inserirMensagem, excluirMensagensDaFicha,
   inserirAuditoria, listarAuditoria,
   listarUsuarios, listarUsuariosPorTipo, buscarUsuario, buscarUsuarioPorEmail, gravarUsuarios, atualizarUsuario, excluirUsuario,

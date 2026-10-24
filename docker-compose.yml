@@ -1,5 +1,5 @@
 services:
-  onboarding:
+  admitte:
     build: .
     ports:
       - "${PORT:-3001}:3001"

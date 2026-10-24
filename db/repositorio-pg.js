@@ -121,6 +121,8 @@ function criar(poolDoCliente) {
     buscarCandidato: (id) => um('SELECT * FROM candidatos WHERE id = $1', [id]),
     gravarCandidatos: (linhas) => gravar('candidatos', linhas),
     atualizarCandidato: (id, campos) => atualizar('candidatos', campos, { id }),
+    excluirCandidato: (id) => excluir('candidatos', 'id', id),
+    excluirSolicitacao: (id) => excluir('solicitacoes_titular', 'id', id),
     listarTagsDasFichas: () => consultar('SELECT id, tags FROM candidatos'),
 
     // mensagens
