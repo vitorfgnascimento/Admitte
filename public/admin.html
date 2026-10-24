@@ -11,21 +11,48 @@
   <link rel="stylesheet" href="/gestao-contas.css">
 </head>
 <body>
-  <main class="gc-pagina">
-    <header class="gc-topo">
-      <div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-logo" viewBox="0 0 40 40"><path style="fill:var(--logo-fundo,#0F3D2A)" d="M21 2.5c10 .4 17.5 7.2 17 17.6C37.5 31 30 37.8 19.8 37.5 9.5 37 2 30 2.4 19.5 2.8 9.2 11 2.1 21 2.500z"/><path d="M20 30V20.5" fill="none" style="stroke:var(--logo-broto,#FBF8F3)" stroke-width="2.4" stroke-linecap="round"/><path d="M20.5 21c0-5.2 3-8.2 8.2-8.2 0 5.2-3 8.2-8.2 8.200z" fill="#00A335"/><path d="M19.5 25c0-4.2-2.6-6.7-7-6.7 0 4.2 2.6 6.7 7 6.7z" style="fill:var(--logo-broto,#FBF8F3)"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="gc-app">
+    <header class="gc-barra">
+      <div class="gc-barra-in">
+        <a class="gc-marca" href="/rh.html" aria-label="Onboarding Digital">
+          <svg class="ic ic-logo" aria-hidden="true"><use href="#i-logo"/></svg>
+          <span>Onboarding Digital</span>
+          <em class="gc-papel">Administração</em>
+        </a>
+        <nav class="gc-nav" aria-label="Navegação">
+          <div class="grupo-acess" data-acessibilidade-slot data-ouvir-ignorar></div>
+          <a class="gc-btn" href="/rh.html">Voltar ao painel do RH</a>
+          <a class="gc-btn" href="/seguranca.html">Segurança da conta</a>
+          <button type="button" class="gc-btn" id="btnSair">Sair</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="gc-pagina">
+      <section class="gc-intro">
+        <span class="gc-sobretitulo">Sua empresa</span>
         <h1>Equipe do RH</h1>
         <p class="gc-sub">Crie e gerencie as contas dos operadores de RH da sua empresa. Cada operador recebe por e-mail um link para definir a própria senha.</p>
-      </div>
-      <nav class="gc-nav" aria-label="Navegação">
-        <a class="gc-btn" href="/rh.html">Voltar ao painel do RH</a>
-        <a class="gc-btn" href="/seguranca.html">Segurança da conta</a>
-        <button type="button" class="gc-btn" id="btnSair">Sair</button>
-      </nav>
-    </header>
-    <section class="gc-cartao" id="areaGestao" aria-live="polite"></section>
-  </main>
+      </section>
 
+      <section class="gc-resumo" aria-label="Resumo">
+        <div class="gc-indicador"><span class="gc-indicador-num" id="resTotal">-</span><span class="gc-indicador-rot">Operadores</span></div>
+        <div class="gc-indicador"><span class="gc-indicador-num" id="resAtivas">-</span><span class="gc-indicador-rot">Com acesso ativo</span></div>
+        <div class="gc-indicador"><span class="gc-indicador-num" id="resPausadas">-</span><span class="gc-indicador-rot">Desativados</span></div>
+      </section>
+
+      <section class="gc-cartao" id="areaGestao" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <script src="/acessibilidade.js"></script>
+  <script src="/ouvir-pagina.js" defer></script>
   <script src="/gestao-contas.js"></script>
   <script>
     (function () {
@@ -48,11 +75,18 @@
             return;
           }
           GestaoContas.montar(document.getElementById('areaGestao'), {
-            base: '/api/admin/operadores', rotulo: 'operador', token: token, idLogado: corpo.usuario.id
+            base: '/api/admin/operadores', rotulo: 'operador', token: token, idLogado: corpo.usuario.id,
+            aoCarregar: function (lista) {
+              var ativas = lista.filter(function (c) { return c.ativo; }).length;
+              document.getElementById('resTotal').textContent = lista.length;
+              document.getElementById('resAtivas').textContent = ativas;
+              document.getElementById('resPausadas').textContent = lista.length - ativas;
+            }
           });
         })
         .catch(function () { window.location.href = '/rh-login.html'; });
     })();
   </script>
+  <script src="/rodape-legal.js" defer></script>
 </body>
 </html>

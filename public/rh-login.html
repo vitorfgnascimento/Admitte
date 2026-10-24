@@ -391,14 +391,9 @@
 
           <p class="primeiro-acesso"><strong>Primeiro acesso?</strong> Use o link do e-mail de convite do administrador da sua empresa para definir a senha.</p>
         </div>
-
-        <div class="abaixo-cartao entra d2">
-          <a class="link-voltar" href="/"><svg class="ic" aria-hidden="true"><use href="#i-seta-esq"/></svg>Sou candidato: ir para o meu acesso</a>
-
-        </div>
       </div>
 
-      <footer class="rodape-pagina">
+      <footer class="rodape-pagina" data-rodape-legal>
         <span>&copy; <span id="anoAtual">2026</span> Onboarding Digital</span>
         <a href="/politica-privacidade.html">Política de Privacidade</a>
         <a href="/termos-de-uso.html">Termos de Uso</a>
@@ -407,22 +402,16 @@
   </main>
 
   <script src="/ouvir-pagina.js" defer></script>
+  <script src="/rodape-legal.js" defer></script>
   <script>
     const API = '/api';
     const el = (id) => document.getElementById(id);
     el('anoAtual').textContent = new Date().getFullYear();
 
-    function mostrarErro(texto, comLinkCandidato) {
+    function mostrarErro(texto) {
       const caixa = el('mensagemErro');
       el('mensagemSucesso').style.display = 'none';
       caixa.textContent = texto;
-      if (comLinkCandidato) {
-        const a = document.createElement('a');
-        a.href = '/';
-        a.textContent = 'Ir para o acesso do candidato';
-        caixa.appendChild(document.createTextNode(' '));
-        caixa.appendChild(a);
-      }
       caixa.style.display = 'block';
     }
     function mostrarSucesso(texto) {
@@ -452,7 +441,7 @@
       // Esta página é só da equipe: uma conta de candidato não fica logada aqui.
       if (!ehEquipe(usuario.tipo)) {
         encerrarSessaoNoServidor(token);
-        mostrarErro('Esta área é exclusiva da equipe de RH.', true);
+        mostrarErro('Esta área é exclusiva da equipe de RH.');
         voltarDoMfa(true);
         return;
       }

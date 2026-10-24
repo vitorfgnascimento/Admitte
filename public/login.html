@@ -59,6 +59,9 @@
       background: var(--creme);
     }
     .topo-form { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
+    .rodape-pagina { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem 1rem; padding: 1rem 0 0.5rem; font-size: 0.8125rem; color: var(--tinta-3); }
+    .rodape-pagina a { color: var(--tinta-2); text-decoration: none; font-weight: 500; }
+    .rodape-pagina a:hover { color: var(--floresta); text-decoration: underline; }
     .form-coluna { width: 100%; max-width: 25rem; margin: auto; }
     .form-coluna > h2 { font-size: 1.75rem; margin-bottom: 0.25rem; }
     .form-coluna .apoio { margin: 0 0 1.5rem; color: var(--tinta-2); }
@@ -369,8 +372,12 @@
         <div class="mensagem-erro" id="mensagemErro" role="alert"></div>
         <div class="mensagem-sucesso" id="mensagemSucesso" role="status"></div>
 
-        <a class="link-voltar" href="/ficha.html"><svg class="ic" aria-hidden="true"><use href="#i-seta-esq"/></svg>Voltar para a Ficha do Candidato</a>
       </div>
+      <footer class="rodape-pagina" data-rodape-legal>
+        <span>&copy; <span id="anoAtual">2026</span> Onboarding Digital</span>
+        <a href="/politica-privacidade.html">Política de Privacidade</a>
+        <a href="/termos-de-uso.html">Termos de Uso</a>
+      </footer>
     </section>
   </main>
 
@@ -387,6 +394,7 @@
   </div>
 
   <script src="/ouvir-pagina.js" defer></script>
+  <script src="/rodape-legal.js" defer></script>
   <script src="/termos-privacidade.js" defer></script>
   <script src="https://accounts.google.com/gsi/client" async defer onerror="mostrarGoogleIndisponivel('Script do Google Identity Services não carregou.')"></script>
   <script>

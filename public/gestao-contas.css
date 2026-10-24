@@ -1,45 +1,79 @@
-/* Estilos das páginas de gestão de contas (master.html e admin.html). */
-.gc-pagina { max-width: 62rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
-.gc-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-.gc-topo h1 { font-size: 2rem; }
-.gc-sub { color: var(--tinta-2); max-width: 46ch; margin: 0.5rem 0 0; }
-.gc-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.gc-cartao { background: var(--papel); border: 1px solid var(--borda); border-radius: var(--r-painel); padding: 1.25rem; }
+/* Estilos das páginas de gestão de contas (master.html e admin.html).
+   Mesma linguagem do login: creme quente, verde de ação, cantos orgânicos. */
+.gc-app { min-height: 100vh; background: radial-gradient(40rem 26rem at 100% 0%, rgba(231, 243, 234, 0.85), rgba(231,243,234,0) 70%), var(--creme); }
 
+/* ---------- Barra superior ---------- */
+.gc-barra { background: rgba(255, 255, 255, 0.82); backdrop-filter: blur(8px); border-bottom: 1px solid var(--borda); position: sticky; top: 0; z-index: 20; }
+.gc-barra-in { max-width: 68rem; margin: 0 auto; padding: 0.75rem 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.gc-marca { display: inline-flex; align-items: center; gap: 0.625rem; text-decoration: none; color: var(--floresta); font-family: var(--fonte-titulo); font-weight: 600; font-size: 1.1875rem; }
+.gc-marca .ic-logo { width: 2.125rem; height: 2.125rem; }
+.gc-papel { font-family: var(--fonte-texto); font-style: normal; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; color: var(--floresta); background: var(--menta); border: 1px solid var(--menta-2); padding: 0.1875rem 0.625rem; border-radius: 999px; }
+.gc-nav { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+/* ---------- Conteúdo ---------- */
+.gc-pagina { max-width: 68rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+.gc-intro { margin-bottom: 1.5rem; }
+.gc-sobretitulo { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--verde-texto); }
+.gc-sobretitulo::before { content: ''; width: 1.75rem; height: 2px; border-radius: 2px; background: var(--verde); }
+.gc-intro h1 { font-size: clamp(1.75rem, 3vw, 2.25rem); margin-top: 0.5rem; }
+.gc-sub { color: var(--tinta-2); max-width: 52ch; margin: 0.5rem 0 0; line-height: 1.6; }
+
+.gc-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.875rem; margin-bottom: 1.25rem; }
+.gc-indicador { background: var(--papel); border: 1px solid var(--borda); border-radius: 1rem 1rem 1rem 0.375rem; padding: 0.875rem 1.125rem; box-shadow: 0 14px 28px -22px rgba(15, 61, 42, 0.4); }
+.gc-indicador-num { display: block; font-family: var(--fonte-titulo); font-size: 1.875rem; font-weight: 600; line-height: 1.1; color: var(--floresta); }
+.gc-indicador-rot { display: block; margin-top: 0.125rem; font-size: 0.8125rem; font-weight: 600; color: var(--tinta-2); }
+
+.gc-cartao { background: var(--papel); border: 1px solid var(--borda); border-radius: 1.25rem; padding: 1.5rem; box-shadow: 0 26px 50px -34px rgba(15, 61, 42, 0.38), 0 2px 6px rgba(15, 61, 42, 0.04); }
+.gc-secao-titulo { font-size: 1.125rem; margin: 0 0 0.25rem; }
+.gc-secao-apoio { margin: 0 0 1rem; font-size: 0.875rem; color: var(--tinta-2); }
+.gc-secao-lista { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--linha); }
+
+/* ---------- Botões ---------- */
 .gc-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-height: 2.5rem; padding: 0.5rem 1rem; border-radius: var(--r-controle);
+  min-height: 2.5rem; padding: 0.5rem 1rem; border-radius: 0.75rem;
   border: 1px solid var(--borda); background: var(--papel); color: var(--tinta);
   font: inherit; font-size: 0.9375rem; font-weight: 600; text-decoration: none; cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
 }
-.gc-btn:hover { background: var(--creme-2); }
+.gc-btn:hover { background: var(--menta); border-color: var(--menta-2); color: var(--floresta); }
 .gc-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.gc-btn-primario { background: var(--verde); border-color: var(--verde); color: var(--tinta-botao); }
-.gc-btn-primario:hover { background: var(--verde-hover); color: #fff; }
+.gc-btn-primario { background: var(--verde); border-color: var(--verde); color: var(--tinta-botao); box-shadow: 0 10px 20px -14px rgba(0, 163, 53, 0.8); }
+.gc-btn-primario:hover { background: var(--verde-hover); border-color: var(--verde-hover); color: #fff; }
+.gc-btn-pequeno { min-height: 2.125rem; padding: 0.25rem 0.75rem; font-size: 0.875rem; border-radius: 0.625rem; }
 
+/* ---------- Formulário ---------- */
 .gc-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75rem; align-items: end; }
 .gc-campo { display: flex; flex-direction: column; gap: 0.375rem; }
-.gc-aviso { margin: 1rem 0; font-size: 0.9375rem; }
+.gc-campo label { font-weight: 600; font-size: 0.9375rem; color: var(--tinta); }
+.gc-campo input { min-height: 2.75rem; border-radius: 0.75rem; }
+.gc-form .gc-btn { min-height: 2.75rem; }
+.gc-aviso { margin: 1rem 0 0; font-size: 0.9375rem; }
 .gc-aviso:empty { display: none; }
-.gc-aviso.gc-ok { background: var(--menta); border-radius: 0.5rem; padding: 0.625rem 0.875rem; }
-.gc-aviso.gc-erro { background: var(--perigo-fundo); color: var(--perigo); border: 1px solid var(--perigo-borda); border-radius: 0.5rem; padding: 0.625rem 0.875rem; }
+.gc-aviso.gc-ok { background: var(--menta); border: 1px solid var(--menta-2); color: #0B4F23; border-radius: 0.75rem; padding: 0.625rem 0.875rem; }
+.gc-aviso.gc-erro { background: var(--perigo-fundo); color: #7E1A14; border: 1px solid var(--perigo-borda); border-radius: 0.75rem; padding: 0.625rem 0.875rem; }
 .gc-aviso a { color: inherit; font-weight: 700; text-decoration: underline; }
 
+/* ---------- Tabela ---------- */
 .gc-tabela-caixa { overflow-x: auto; margin-top: 0.5rem; }
 .gc-tabela { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
-.gc-tabela th, .gc-tabela td { text-align: left; padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--borda); vertical-align: middle; }
-.gc-tabela th { background: var(--menta); color: var(--floresta); font-size: 0.8125rem; }
+.gc-tabela th, .gc-tabela td { text-align: left; padding: 0.75rem 0.75rem; border-bottom: 1px solid var(--linha); vertical-align: middle; }
+.gc-tabela th { color: var(--tinta-2); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: transparent; border-bottom: 1px solid var(--borda); }
+.gc-tabela tbody tr:hover { background: rgba(231, 243, 234, 0.45); }
+.gc-pessoa { display: flex; align-items: center; gap: 0.75rem; }
+.gc-avatar { width: 2.25rem; height: 2.25rem; flex: 0 0 auto; border-radius: 12px 12px 12px 4px; display: grid; place-items: center; font-size: 0.8125rem; font-weight: 700; color: var(--floresta); background: #DCEEE1; }
+.gc-avatar.v2 { background: #F3E3C3; } .gc-avatar.v3 { background: #D8E4F2; }
+.gc-pessoa-nome { font-weight: 600; color: var(--tinta); }
 .gc-acoes { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.gc-vazio { color: var(--tinta-2); text-align: center; padding: 1.5rem; }
-.gc-voce { color: var(--tinta-2); font-size: 0.875rem; }
-.gc-situacao { font-weight: 600; font-size: 0.875rem; padding: 0.125rem 0.5rem; border-radius: 999px; }
-.gc-ativa { background: var(--menta); color: var(--floresta); }
+.gc-vazio { color: var(--tinta-2); text-align: center; padding: 2rem 1rem; }
+.gc-voce { color: var(--tinta-2); font-size: 0.875rem; font-weight: 600; }
+.gc-situacao { display: inline-flex; align-items: center; gap: 0.375rem; font-weight: 700; font-size: 0.75rem; padding: 0.25rem 0.625rem; border-radius: 999px; white-space: nowrap; }
+.gc-situacao::before { content: ''; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: currentColor; }
+.gc-ativa { background: #D2E9D9; color: #0B4F23; }
 .gc-inativa { background: var(--creme-2); color: var(--tinta-2); }
 
-.gc-login { max-width: 26rem; margin: 3rem auto; }
-.gc-login .gc-campo { margin-bottom: 1rem; }
-.gc-login .gc-btn { width: 100%; }
-
-@media (max-width: 40rem) {
+@media (max-width: 52rem) {
   .gc-form { grid-template-columns: 1fr; }
+  .gc-resumo { grid-template-columns: 1fr; }
+  .gc-cartao { padding: 1.125rem; border-radius: 1rem; }
 }

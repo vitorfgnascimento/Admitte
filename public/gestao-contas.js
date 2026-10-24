@@ -23,6 +23,7 @@
     var rotulo = opcoes.rotulo;
     var token = opcoes.token;
     var idLogado = opcoes.idLogado || null;
+    var aoCarregar = opcoes.aoCarregar || function () {};
 
     function chamar(metodo, caminho, corpo) {
       return fetch(base + caminho, {
@@ -49,9 +50,14 @@
       el('thead', {}, [el('tr', {}, ['Nome', 'E-mail', 'Situação', 'Ações'].map(function (t) { return el('th', { texto: t }); }))]),
       corpoTabela
     ]);
+    container.appendChild(el('h2', { class: 'gc-secao-titulo', texto: 'Nova conta de ' + rotulo }));
+    container.appendChild(el('p', { class: 'gc-secao-apoio', texto: 'A pessoa recebe por e-mail o link para definir a própria senha.' }));
     container.appendChild(formulario);
     container.appendChild(aviso);
-    container.appendChild(el('div', { class: 'gc-tabela-caixa' }, [tabela]));
+    container.appendChild(el('div', { class: 'gc-secao-lista' }, [
+      el('h2', { class: 'gc-secao-titulo', texto: 'Contas cadastradas' }),
+      el('div', { class: 'gc-tabela-caixa' }, [tabela])
+    ]));
 
     function mostrar(texto, erro, extra) {
       aviso.textContent = texto;
@@ -65,11 +71,13 @@
     }
 
     function linha(c) {
+      var iniciais = c.nome.trim().split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0).toUpperCase(); }).join('');
+      var variante = ['', ' v2', ' v3'][(c.nome.length + c.email.length) % 3];
       var situacao = el('span', { class: 'gc-situacao ' + (c.ativo ? 'gc-ativa' : 'gc-inativa'), texto: c.ativo ? 'Ativa' : 'Desativada' });
       var ehVoce = c.id === idLogado;
       var botoes = [];
       if (!ehVoce) {
-        var alternar = el('button', { type: 'button', class: 'gc-btn', texto: c.ativo ? 'Desativar' : 'Reativar' });
+        var alternar = el('button', { type: 'button', class: 'gc-btn gc-btn-pequeno', texto: c.ativo ? 'Desativar' : 'Reativar' });
         alternar.addEventListener('click', function () {
           if (c.ativo && !window.confirm('Desativar o acesso de ' + c.nome + '? As sessões abertas serão encerradas.')) return;
           chamar('PATCH', '/' + encodeURIComponent(c.id), { ativo: !c.ativo }).then(function (r) {
@@ -79,7 +87,7 @@
           });
         });
         botoes.push(alternar);
-        var resetarMfa = el('button', { type: 'button', class: 'gc-btn', texto: 'Redefinir 2 etapas' });
+        var resetarMfa = el('button', { type: 'button', class: 'gc-btn gc-btn-pequeno', texto: 'Redefinir 2 etapas' });
         resetarMfa.addEventListener('click', function () {
           if (!window.confirm('Redefinir a verificação em duas etapas de ' + c.nome + '? As sessões abertas serão encerradas e a pessoa terá de configurá-la de novo.')) return;
           chamar('POST', '/' + encodeURIComponent(c.id) + '/mfa/resetar').then(function (r) {
@@ -88,7 +96,7 @@
         });
         botoes.push(resetarMfa);
         if (c.ativo) {
-          var reenviar = el('button', { type: 'button', class: 'gc-btn', texto: 'Reenviar acesso' });
+          var reenviar = el('button', { type: 'button', class: 'gc-btn gc-btn-pequeno', texto: 'Reenviar acesso' });
           reenviar.addEventListener('click', function () {
             chamar('POST', '/' + encodeURIComponent(c.id) + '/reenviar-acesso').then(function (r) {
               mostrar(r.ok ? 'Novo acesso enviado para ' + c.email + '.' : (r.corpo.erro || 'Não foi possível reenviar.'), !r.ok, r.ok ? r.corpo : null);
@@ -100,7 +108,7 @@
         botoes.push(el('span', { class: 'gc-voce', texto: 'Você' }));
       }
       return el('tr', {}, [
-        el('td', { texto: c.nome }),
+        el('td', {}, [el('div', { class: 'gc-pessoa' }, [el('span', { class: 'gc-avatar' + variante, 'aria-hidden': 'true', texto: iniciais }), el('span', { class: 'gc-pessoa-nome', texto: c.nome })])]),
         el('td', { texto: c.email }),
         el('td', {}, [situacao]),
         el('td', { class: 'gc-acoes' }, botoes)
@@ -110,6 +118,7 @@
     function carregar() {
       chamar('GET', '').then(function (r) {
         corpoTabela.textContent = '';
+        if (r.ok) aoCarregar(r.corpo);
         if (!r.ok) { mostrar(r.corpo.erro || 'Não foi possível carregar a lista.', true); return; }
         if (!r.corpo.length) {
           corpoTabela.appendChild(el('tr', {}, [el('td', { colspan: '4', class: 'gc-vazio', texto: 'Nenhum ' + rotulo + ' cadastrado ainda.' })]));

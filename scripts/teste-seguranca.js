@@ -204,8 +204,18 @@ async function suite(BASE, urlFalso) {
   const htmlRhLogin = await (await fetch(BASE + '/rh-login.html')).text();
   t('rh-login', 'Login do RH', 'Página própria do RH com a marca, e-mail, senha e etapa de MFA', htmlRhLogin.includes('<title>Área do RH - Admitte</title>') && !htmlRhLogin.includes('Onboarding Digital') && htmlRhLogin.includes('id="formEntrar"') && htmlRhLogin.includes('id="formMfa"') && /name="robots" content="noindex/.test(htmlRhLogin), '');
   t('rh-login', 'Login do RH', 'Sem cadastro e sem login com Google (contas de RH são criadas pelo administrador)', !htmlRhLogin.includes('formCriarConta') && !htmlRhLogin.includes('accounts.google.com'), '');
-  t('rh-login', 'Login do RH', 'Link para o acesso do candidato e logo/favicon da marca', htmlRhLogin.includes('href="/"') && htmlRhLogin.includes('<img class="ic ic-logo" src="/marca/logo.png"') && htmlRhLogin.includes('<link rel="icon" href="/marca/logo.png">'), '');
+  t('rh-login', 'Login do RH', 'Sem link para o acesso do candidato; logo e favicon da marca', !htmlRhLogin.includes('Sou candidato') && !htmlRhLogin.includes('href="/"') && htmlRhLogin.includes('<img class="ic ic-logo" src="/marca/logo.png"') && htmlRhLogin.includes('<link rel="icon" href="/marca/logo.png">'), '');
   const atalhoRh = await fetch(BASE + '/rh', { redirect: 'manual' });
+  // Rodapé legal e pop-up em todas as páginas
+  const paginasLegais = ['login', 'rh-login', 'master', 'ficha', 'rh', 'admin', 'titulares', 'seguranca', 'recuperar-senha', 'politica-privacidade', 'termos-de-uso'];
+  const htmlsLegais = await Promise.all(paginasLegais.map(async (n) => [n, await (await fetch(BASE + '/' + n + '.html')).text()]));
+  t('lgpd', 'Rodapé legal', 'Todas as páginas carregam o rodapé legal com pop-up', htmlsLegais.every(([, h]) => h.includes('/rodape-legal.js')), htmlsLegais.filter(([, h]) => !h.includes('/rodape-legal.js')).map(([n]) => n).join(','));
+  t('lgpd', 'Rodapé legal', 'Telas de acesso trazem copyright, política de privacidade e termos de uso', ['login', 'rh-login', 'master'].every((n) => { const h = htmlsLegais.find(([x]) => x === n)[1]; return h.includes('data-rodape-legal') && h.includes('href="/politica-privacidade.html"') && h.includes('href="/termos-de-uso.html"') && /&copy;/.test(h); }), '');
+  const scriptRodape = await (await fetch(BASE + '/rodape-legal.js')).text();
+  t('lgpd', 'Rodapé legal', 'O script abre os termos num pop-up (iframe embutido) e fecha com Esc', scriptRodape.includes('embed') && scriptRodape.includes('legal-fundo') && scriptRodape.includes("'Escape'"), '');
+  const { PNG } = require('pngjs');
+  const logoPng = PNG.sync.read(Buffer.from(await (await fetch(BASE + '/marca/logo.png')).arrayBuffer()));
+  t('lgpd', 'Logo', 'O logo não tem fundo (cantos transparentes, traço opaco)', logoPng.data[3] === 0 && logoPng.data[logoPng.data.length - 1] === 0 && logoPng.data.some((v, i) => i % 4 === 3 && v === 255), `alfa canto ${logoPng.data[3]}`);
   t('rh-login', 'Login do RH', '/rh leva ao login do RH (302)', atalhoRh.status === 302 && atalhoRh.headers.get('location') === '/rh-login.html', `${atalhoRh.status} ${atalhoRh.headers.get('location')}`);
   t('rh-login', 'Login do RH', 'A tela do candidato não tem botão nem link para o login do RH (porta separada)', !htmlLogin.includes('btnAcessoRapidoRh') && !htmlLogin.includes('Entrar como RH') && !htmlLogin.includes('rh-login'), '');
   const paginasEquipe = await Promise.all(['rh.html', 'admin.html', 'titulares.html', 'seguranca.html'].map(async (p) => [p, await (await fetch(`${BASE}/${p}`)).text()]));

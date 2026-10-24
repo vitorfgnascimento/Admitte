@@ -8,50 +8,294 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <script src="/acessibilidade.js"></script>
   <link rel="stylesheet" href="/tema.css">
   <link rel="stylesheet" href="/gestao-contas.css">
+  <style>
+    /* =========================================================================
+       ACESSO DO MASTER: mesma linguagem do login do candidato e do RH
+       (tela dividida, formas orgânicas, cartão de acesso)
+       ========================================================================= */
+    .login-tela { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr); }
+
+    .painel-marca {
+      position: relative; overflow: hidden;
+      background:
+        radial-gradient(60rem 40rem at 105% -10%, #DCEEE1 0%, rgba(220,238,225,0) 60%),
+        radial-gradient(40rem 30rem at -10% 110%, #EFE6D2 0%, rgba(239,230,210,0) 62%),
+        var(--creme-2);
+      padding: 1.75rem clamp(1.75rem, 4.5vw, 5rem) 1.5rem;
+      display: grid; grid-template-rows: auto 1fr auto; gap: 1.25rem;
+    }
+    .painel-marca > *:not(.forma-organica) { position: relative; z-index: 1; }
+
+    .logo-marca { display: inline-flex; align-items: center; gap: 0.625rem; font-family: var(--fonte-titulo); font-weight: 600; font-size: 1.375rem; color: var(--floresta); }
+    .logo-marca .ic-logo { width: 2.5rem; height: 2.5rem; }
+
+    .miolo { align-self: center; max-width: 34rem; width: 100%; }
+    .sobretitulo { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--verde-texto); }
+    .sobretitulo::before { content: ''; width: 1.75rem; height: 2px; border-radius: 2px; background: var(--verde); }
+    .miolo h1 { margin: 0.625rem 0 0; font-size: clamp(2rem, 2.7vw, 2.625rem); line-height: 1.08; max-width: 22ch; }
+    .miolo h1 em { font-style: italic; font-weight: 500; color: var(--verde-texto); }
+    .miolo .lead { margin: 0.875rem 0 0; font-size: 1rem; line-height: 1.6; color: #4A463F; max-width: 30rem; }
+
+    /* Vitrine ilustrativa: contas das empresas clientes (dados fictícios) */
+    .vitrine-area { position: relative; margin-top: 1.75rem; max-width: 31rem; }
+    .vitrine { position: relative; z-index: 1; background: var(--papel); border: 1px solid #E3DCCD; border-radius: 1.125rem; padding: 1rem 1.25rem 1.125rem; box-shadow: 0 22px 44px -22px rgba(15, 61, 42, 0.34), 0 3px 8px rgba(15, 61, 42, 0.06); }
+    .vitrine-area::before { content: ''; position: absolute; inset: 0.625rem -0.625rem -0.625rem 0.625rem; border-radius: 1.125rem; background: var(--menta-2); opacity: 0.7; z-index: 0; }
+    .vitrine-topo { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .vitrine-topo strong { font-size: 0.9375rem; color: var(--floresta); }
+    .vitrine-topo span { font-size: 0.75rem; font-weight: 600; color: var(--tinta-2); background: var(--creme-2); padding: 0.1875rem 0.5rem; border-radius: 999px; }
+    .contas { list-style: none; margin: 0; padding: 0; }
+    .conta-linha { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-top: 1px solid var(--linha); }
+    .avatar-conta { width: 2.25rem; height: 2.25rem; border-radius: 12px 12px 12px 4px; display: grid; place-items: center; font-size: 0.8125rem; font-weight: 700; color: var(--floresta); }
+    .avatar-conta.a1 { background: #DCEEE1; } .avatar-conta.a2 { background: #F3E3C3; } .avatar-conta.a3 { background: #D8E4F2; }
+    .conta-nome { display: block; font-size: 0.9375rem; font-weight: 600; color: var(--tinta); line-height: 1.25; }
+    .conta-info { display: block; font-size: 0.8125rem; color: var(--tinta-2); line-height: 1.3; }
+    .chip-conta { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.625rem; border-radius: 999px; white-space: nowrap; background: #D2E9D9; color: #0B4F23; }
+    .chip-conta::before { content: ''; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: currentColor; }
+    .chip-conta.pausada { background: var(--creme-2); color: var(--tinta-2); }
+    .aviso-flutuante { position: absolute; z-index: 2; right: -0.875rem; bottom: -1.375rem; display: inline-flex; align-items: center; gap: 0.5rem; background: var(--floresta); color: #FBF8F3; padding: 0.5625rem 0.875rem 0.5625rem 0.625rem; border-radius: 0.875rem; font-size: 0.8125rem; font-weight: 600; box-shadow: 0 14px 28px -12px rgba(15, 61, 42, 0.55); }
+    .aviso-flutuante .ic { width: 1.25rem; height: 1.25rem; color: #6EDB93; }
+    .legenda-vitrine { margin: 1.625rem 0 0; font-size: 0.75rem; color: var(--tinta-3); }
+
+    .confianca { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.625rem 1.25rem; }
+    .confianca li { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; color: #3A3732; }
+    .selo-conf { width: 2rem; height: 2rem; display: grid; place-items: center; flex: 0 0 auto; background: var(--papel); color: var(--floresta); border: 1px solid #DCD5C7; border-radius: 62% 38% 55% 45% / 48% 58% 42% 52%; }
+    .selo-conf .ic { width: 1.0625rem; height: 1.0625rem; }
+
+    .painel-form { display: flex; flex-direction: column; padding: 0.875rem clamp(1.25rem, 4.5vw, 4.5rem) 0.5rem; background: radial-gradient(34rem 24rem at 100% 0%, rgba(231, 243, 234, 0.9), rgba(231,243,234,0) 70%), var(--creme); }
+    .topo-form { display: flex; justify-content: flex-end; }
+    .coluna-acesso { width: 100%; max-width: 26rem; margin: auto; padding: 0.25rem 0; }
+
+    .cartao-login { background: var(--papel); border: 1px solid var(--borda); border-radius: 1.375rem; padding: 1.75rem 1.75rem 1.5rem; box-shadow: 0 26px 50px -28px rgba(15, 61, 42, 0.32), 0 2px 6px rgba(15, 61, 42, 0.05); }
+    .selo-restrito { display: inline-flex; align-items: center; gap: 0.4375rem; padding: 0.25rem 0.75rem 0.25rem 0.5rem; margin-bottom: 0.875rem; background: var(--menta); color: var(--floresta); border: 1px solid var(--menta-2); border-radius: 999px; font-size: 0.8125rem; font-weight: 600; }
+    .selo-restrito .ic { width: 1.0625rem; height: 1.0625rem; }
+    .cartao-login h2 { font-size: 1.75rem; margin: 0 0 0.25rem; }
+    .cartao-login .apoio { margin: 0 0 1.125rem; color: var(--tinta-2); line-height: 1.5; font-size: 0.9375rem; }
+
+    .campo { display: flex; flex-direction: column; margin-bottom: 0.875rem; }
+    .campo label { margin-bottom: 0.375rem; font-weight: 600; color: var(--tinta); font-size: 0.9375rem; }
+    .campo input { min-height: 3rem; border-radius: 0.75rem; }
+    #mEmail, #mSenha, #mfaCodigo { background-repeat: no-repeat; background-position: 0.9375rem center; background-size: 1.25rem 1.25rem; padding-left: 2.875rem; }
+    #mEmail { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A857C' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5.5' width='17' height='13' rx='2.5'/%3E%3Cpath d='M4.5 7.5l7.5 6 7.5-6'/%3E%3C/svg%3E"); }
+    #mSenha { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A857C' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5.5' y='10.5' width='13' height='9.5' rx='2'/%3E%3Cpath d='M8.5 10.500V8a3.500 3.500 0 0 1 7 0v2.500'/%3E%3C/svg%3E"); }
+    #mfaCodigo { letter-spacing: 0.08em; font-weight: 600; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A857C' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.500l7 2.600v5.400c0 4.300-2.900 7.700-7 9-4.100-1.300-7-4.700-7-9V6.100z'/%3E%3Cpath d='M8.800 12.200l2.200 2.200 4.200-4.400'/%3E%3C/svg%3E"); }
+
+    .campo-senha { position: relative; display: flex; }
+    .campo-senha input { flex: 1; min-width: 0; padding-right: 5.5rem; }
+    .btn-ver-senha { position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); min-height: 2rem; padding: 0.25rem 0.625rem; background: transparent; border: 0; border-radius: 0.5rem; color: var(--verde-texto); font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    .btn-ver-senha:hover { color: var(--floresta); background: var(--menta); }
+
+    .btn-primario { width: 100%; margin-top: 0.375rem; min-height: 3rem; font-size: 1.0625rem; border-radius: 0.75rem; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 10px 20px -12px rgba(0, 163, 53, 0.8); transition: transform 0.15s, box-shadow 0.15s, background-color 0.15s; }
+    .btn-primario .ic { width: 1.25rem; height: 1.25rem; transition: transform 0.15s; }
+    .btn-primario:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 24px -12px rgba(0, 163, 53, 0.85); }
+    .btn-primario:hover:not(:disabled) .ic { transform: translateX(3px); }
+    .btn-primario:disabled { opacity: 0.7; cursor: progress; }
+    .btn-link-senha { display: block; margin: 0.625rem auto 0; padding: 0.125rem 0.5rem; background: none; border: 0; cursor: pointer; color: var(--verde-texto); font: inherit; font-size: 0.9375rem; font-weight: 600; text-decoration: underline; }
+    .btn-link-senha:hover { color: var(--floresta); }
+
+    .mensagem-erro { margin-top: 1rem; padding: 0.75rem 0.875rem; border-radius: 0.75rem; font-size: 0.9375rem; display: none; background: var(--perigo-fundo); border: 1px solid var(--perigo-borda); color: #7E1A14; }
+    .mensagem-sucesso { margin-top: 1rem; padding: 0.75rem 0.875rem; border-radius: 0.75rem; font-size: 0.9375rem; display: none; background: var(--menta); border: 1px solid var(--menta-2); color: #0B4F23; font-weight: 600; }
+
+    .abaixo-cartao { margin-top: 1rem; text-align: center; }
+    .nota-seguranca { margin: 0.875rem auto 0; max-width: 22rem; font-size: 0.8125rem; color: var(--tinta-2); line-height: 1.55; }
+    .rodape-pagina { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem 1rem; padding-top: 0.375rem; font-size: 0.8125rem; color: var(--tinta-3); }
+    .rodape-pagina a { color: var(--tinta-2); text-decoration: none; font-weight: 500; }
+    .rodape-pagina a:hover { color: var(--floresta); text-decoration: underline; }
+
+    @keyframes subir { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .entra { animation: subir 0.55s cubic-bezier(.2,.7,.2,1) both; }
+    .entra.d1 { animation-delay: 0.05s; } .entra.d2 { animation-delay: 0.15s; } .entra.d3 { animation-delay: 0.28s; }
+    @media (prefers-reduced-motion: reduce) { .entra { animation: none; } .btn-primario, .btn-primario .ic { transition: none; } }
+
+    @media (min-width: 921px) and (max-height: 840px) {
+      .miolo .lead, .legenda-vitrine { display: none; }
+      .vitrine-area { margin-top: 1.375rem; }
+    }
+    @media (max-width: 1100px) {
+      .login-tela { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .aviso-flutuante { right: 0.5rem; }
+    }
+    @media (max-width: 920px) {
+      .login-tela { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+      .painel-marca { grid-template-rows: auto; padding: 1.25rem 1.25rem 1.5rem; gap: 0.75rem; }
+      .miolo .lead, .vitrine-area, .legenda-vitrine, .confianca, .sobretitulo { display: none; }
+      .miolo h1 { margin-top: 0.25rem; font-size: 1.75rem; max-width: none; }
+      .painel-form { padding-top: 1rem; }
+      .topo-form { justify-content: flex-start; }
+      .coluna-acesso { padding: 0.75rem 0 0; }
+      .cartao-login { padding: 1.5rem 1.25rem 1.25rem; border-radius: 1.125rem; }
+    }
+  </style>
 </head>
 <body>
-  <!-- LOGIN DO MASTER (externo: conta do dono da plataforma, definida no servidor) -->
-  <main class="gc-pagina gc-login" id="telaLogin">
-    <h1>Administração da plataforma</h1>
-    <p class="gc-sub">Acesso restrito ao administrador da plataforma.</p>
-    <form class="gc-cartao" id="formMaster" style="margin-top:1.5rem">
-      <div class="gc-campo">
-        <label for="mEmail">E-mail</label>
-        <input type="email" id="mEmail" autocomplete="username" required>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-logo" viewBox="0 0 40 40"><path style="fill:var(--logo-fundo,#0F3D2A)" d="M21 2.5c10 .4 17.5 7.2 17 17.6C37.5 31 30 37.8 19.8 37.5 9.5 37 2 30 2.4 19.5 2.8 9.2 11 2.1 21 2.500z"/><path d="M20 30V20.5" fill="none" style="stroke:var(--logo-broto,#FBF8F3)" stroke-width="2.4" stroke-linecap="round"/><path d="M20.5 21c0-5.2 3-8.2 8.2-8.2 0 5.2-3 8.2-8.2 8.200z" fill="#00A335"/><path d="M19.5 25c0-4.2-2.6-6.7-7-6.7 0 4.2 2.6 6.7 7 6.7z" style="fill:var(--logo-broto,#FBF8F3)"/></symbol>
+      <symbol id="i-cadeado" viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.500V8a3.500 3.500 0 0 1 7 0v2.500"/></symbol>
+      <symbol id="i-escudo" viewBox="0 0 24 24"><path d="M12 3.500l7 2.600v5.400c0 4.300-2.900 7.700-7 9-4.100-1.300-7-4.700-7-9V6.100z"/><path d="M8.800 12.200l2.200 2.200 4.200-4.400"/></symbol>
+      <symbol id="i-lista" viewBox="0 0 24 24"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.500l2.700 2.700L16 9.500"/></symbol>
+      <symbol id="i-seta-dir" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- ======================= ACESSO DO MASTER ======================= -->
+  <main class="login-tela" id="telaLogin">
+    <section class="painel-marca" aria-label="Apresentação">
+      <svg class="forma-organica" style="right:-6rem;top:-5rem;width:26rem;height:26rem;opacity:.55" viewBox="0 0 400 400" aria-hidden="true" focusable="false">
+        <path d="M312 40c52 36 84 104 68 164s-84 100-148 112-130-14-160-70S2 142 60 94 260 4 312 40z" fill="#DCEEE1"/>
+      </svg>
+      <svg class="forma-organica" style="right:6%;bottom:14%;width:8rem;height:8rem;opacity:.75" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+        <path d="M100 18c40 4 72 34 76 74s-22 78-62 88-84-8-98-46S36 24 100 18z" fill="#F3E3C3"/>
+      </svg>
+
+      <div class="logo-marca entra">
+        <svg class="ic ic-logo" aria-hidden="true"><use href="#i-logo"/></svg>
+        <span>Onboarding Digital</span>
       </div>
-      <div class="gc-campo">
-        <label for="mSenha">Senha</label>
-        <input type="password" id="mSenha" autocomplete="current-password" required>
+
+      <div class="miolo">
+        <div class="entra d1">
+          <span class="sobretitulo">Administração da plataforma</span>
+          <h1>Cada cliente, <em>com o seu espaço</em> e sob o seu comando.</h1>
+          <p class="lead">Crie as contas administradoras das empresas contratantes e acompanhe quem tem acesso, com cada ação registrada.</p>
+        </div>
+
+        <!-- Ilustração (decorativa; dados fictícios) -->
+        <div class="vitrine-area entra d2" aria-hidden="true" data-ouvir-ignorar>
+          <div class="vitrine">
+            <div class="vitrine-topo"><strong>Empresas clientes</strong><span>Visão geral</span></div>
+            <ul class="contas">
+              <li class="conta-linha">
+                <span class="avatar-conta a1">AL</span>
+                <span><span class="conta-nome">Alvorada Logística</span><span class="conta-info">3 operadores de RH</span></span>
+                <span class="chip-conta">Ativa</span>
+              </li>
+              <li class="conta-linha">
+                <span class="avatar-conta a2">NV</span>
+                <span><span class="conta-nome">Nova Vida Saúde</span><span class="conta-info">5 operadores de RH</span></span>
+                <span class="chip-conta">Ativa</span>
+              </li>
+              <li class="conta-linha">
+                <span class="avatar-conta a3">TC</span>
+                <span><span class="conta-nome">Terra &amp; Casa</span><span class="conta-info">Convite enviado</span></span>
+                <span class="chip-conta pausada">Aguardando</span>
+              </li>
+            </ul>
+          </div>
+          <div class="aviso-flutuante"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Convite enviado por e-mail</div>
+        </div>
+        <p class="legenda-vitrine" aria-hidden="true">Ilustração, com dados fictícios.</p>
       </div>
-      <button type="submit" class="gc-btn gc-btn-primario">Entrar</button>
-      <div class="gc-aviso" id="avisoLogin" role="alert"></div>
-    </form>
+
+      <ul class="confianca entra d3">
+        <li><span class="selo-conf"><svg class="ic" aria-hidden="true"><use href="#i-cadeado"/></svg></span>Acesso restrito</li>
+        <li><span class="selo-conf"><svg class="ic" aria-hidden="true"><use href="#i-escudo"/></svg></span>Verificação em duas etapas</li>
+        <li><span class="selo-conf"><svg class="ic" aria-hidden="true"><use href="#i-lista"/></svg></span>Trilha de auditoria</li>
+      </ul>
+    </section>
+
+    <section class="painel-form" aria-label="Acesso do administrador da plataforma">
+      <div class="topo-form">
+        <div class="grupo-acess" data-acessibilidade-slot data-ouvir-ignorar>
+          <span data-ouvir-pagina-slot></span>
+        </div>
+      </div>
+
+      <div class="coluna-acesso">
+        <div class="cartao-login entra d1">
+          <span class="selo-restrito"><svg class="ic" aria-hidden="true"><use href="#i-cadeado"/></svg>Acesso restrito</span>
+          <h2>Entrar na administração</h2>
+          <p class="apoio">Área exclusiva do responsável pela plataforma.</p>
+
+          <form id="formMaster">
+            <div class="campo">
+              <label for="mEmail">E-mail</label>
+              <input type="email" id="mEmail" autocomplete="username" placeholder="voce@suaempresa.com.br" required autofocus>
+            </div>
+            <div class="campo">
+              <label for="mSenha">Senha</label>
+              <input type="password" id="mSenha" autocomplete="current-password" placeholder="Sua senha" required>
+            </div>
+            <button type="submit" class="btn btn-primario" id="btnEntrar">Entrar<svg class="ic" aria-hidden="true"><use href="#i-seta-dir"/></svg></button>
+          </form>
+
+          <form id="formMfa" hidden>
+            <p class="aviso-termos">Verificação em duas etapas: abra o aplicativo autenticador e informe o código de 6 dígitos. Sem o aplicativo, use um código de recuperação.</p>
+            <div class="campo">
+              <label for="mfaCodigo">Código de verificação</label>
+              <input type="text" id="mfaCodigo" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="000000" required>
+            </div>
+            <button type="submit" class="btn btn-primario">Confirmar<svg class="ic" aria-hidden="true"><use href="#i-seta-dir"/></svg></button>
+            <button type="button" class="btn-link-senha" id="btnMfaVoltar">Voltar</button>
+          </form>
+
+          <div class="mensagem-erro" id="avisoLogin" role="alert"></div>
+          <div class="mensagem-sucesso" id="sucessoLogin" role="status"></div>
+        </div>
+        <p class="nota-seguranca" style="text-align:center">Todos os acessos a esta área ficam registrados na trilha de auditoria.</p>
+      </div>
+
+      <footer class="rodape-pagina" data-rodape-legal>
+        <span>&copy; <span id="anoAtual">2026</span> Onboarding Digital</span>
+        <a href="/politica-privacidade.html">Política de Privacidade</a>
+        <a href="/termos-de-uso.html">Termos de Uso</a>
+      </footer>
+    </section>
   </main>
 
-  <!-- PAINEL DO MASTER: cria e gerencia as contas administradoras (clientes) -->
-  <main class="gc-pagina" id="telaPainel" hidden>
-    <header class="gc-topo">
-      <div>
-        <h1>Administradores (clientes)</h1>
-        <p class="gc-sub">Crie a conta administradora de cada empresa contratante. O administrador recebe por e-mail um link para definir a senha e passa a criar e gerenciar os operadores do próprio RH.</p>
+  <!-- ======================= PAINEL DO MASTER ======================= -->
+  <div class="gc-app" id="telaPainel" hidden>
+    <header class="gc-barra">
+      <div class="gc-barra-in">
+        <a class="gc-marca" href="/master.html" aria-label="Onboarding Digital">
+          <svg class="ic ic-logo" aria-hidden="true"><use href="#i-logo"/></svg>
+          <span>Onboarding Digital</span>
+          <em class="gc-papel">Administração da plataforma</em>
+        </a>
+        <nav class="gc-nav" aria-label="Navegação">
+          <div class="grupo-acess" data-acessibilidade-slot data-ouvir-ignorar></div>
+          <a class="gc-btn" href="/seguranca.html">Segurança da conta</a>
+          <button type="button" class="gc-btn" id="btnSair">Sair</button>
+        </nav>
       </div>
-      <nav class="gc-nav">
-        <a class="gc-btn" href="/seguranca.html">Segurança da conta</a>
-        <button type="button" class="gc-btn" id="btnSair">Sair</button>
-      </nav>
     </header>
-    <section class="gc-cartao" id="areaGestao" aria-live="polite"></section>
-  </main>
 
+    <main class="gc-pagina">
+      <section class="gc-intro">
+        <span class="gc-sobretitulo">Clientes da plataforma</span>
+        <h1>Administradores das empresas</h1>
+        <p class="gc-sub">Crie a conta administradora de cada empresa contratante. O administrador recebe por e-mail um link para definir a senha e passa a criar e gerenciar os operadores do próprio RH.</p>
+      </section>
+
+      <section class="gc-resumo" aria-label="Resumo">
+        <div class="gc-indicador"><span class="gc-indicador-num" id="resTotal">-</span><span class="gc-indicador-rot">Administradores</span></div>
+        <div class="gc-indicador"><span class="gc-indicador-num" id="resAtivas">-</span><span class="gc-indicador-rot">Com acesso ativo</span></div>
+        <div class="gc-indicador"><span class="gc-indicador-num" id="resPausadas">-</span><span class="gc-indicador-rot">Desativados</span></div>
+      </section>
+
+      <section class="gc-cartao" id="areaGestao" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <script src="/ouvir-pagina.js" defer></script>
+  <script src="/rodape-legal.js" defer></script>
   <script src="/gestao-contas.js"></script>
   <script>
     (function () {
       var API = '/api';
-      var telaLogin = document.getElementById('telaLogin');
-      var telaPainel = document.getElementById('telaPainel');
+      var el = function (id) { return document.getElementById(id); };
+      var telaLogin = el('telaLogin');
+      var telaPainel = el('telaPainel');
+      el('anoAtual').textContent = new Date().getFullYear();
 
+      function erro(texto) {
+        el('sucessoLogin').style.display = 'none';
+        el('avisoLogin').textContent = texto;
+        el('avisoLogin').style.display = texto ? 'block' : 'none';
+      }
       function limparSessao() {
         localStorage.removeItem('onboarding_token');
         localStorage.removeItem('onboarding_usuario');
@@ -62,13 +306,20 @@
         limparSessao();
         window.location.reload();
       }
-      document.getElementById('btnSair').addEventListener('click', sair);
+      el('btnSair').addEventListener('click', sair);
 
       function mostrarPainel(token, usuario) {
         telaLogin.hidden = true;
         telaPainel.hidden = false;
-        GestaoContas.montar(document.getElementById('areaGestao'), {
-          base: API + '/master/admins', rotulo: 'administrador', token: token, idLogado: usuario.id
+        document.title = 'Administradores - Onboarding Digital';
+        GestaoContas.montar(el('areaGestao'), {
+          base: API + '/master/admins', rotulo: 'administrador', token: token, idLogado: usuario.id,
+          aoCarregar: function (lista) {
+            var ativas = lista.filter(function (c) { return c.ativo; }).length;
+            el('resTotal').textContent = lista.length;
+            el('resAtivas').textContent = ativas;
+            el('resPausadas').textContent = lista.length - ativas;
+          }
         });
       }
 
@@ -81,29 +332,94 @@
           .catch(function () {});
       }
 
-      document.getElementById('formMaster').addEventListener('submit', function (e) {
+      // Mostrar / ocultar senha (oculta por padrão)
+      document.querySelectorAll('input[type="password"]').forEach(function (campo) {
+        var envoltorio = document.createElement('div');
+        envoltorio.className = 'campo-senha';
+        campo.parentNode.insertBefore(envoltorio, campo);
+        envoltorio.appendChild(campo);
+        var botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'btn-ver-senha';
+        botao.setAttribute('aria-controls', campo.id);
+        envoltorio.appendChild(botao);
+        function definir(visivel) {
+          campo.type = visivel ? 'text' : 'password';
+          botao.textContent = visivel ? 'Ocultar' : 'Mostrar';
+          botao.setAttribute('aria-pressed', String(visivel));
+          botao.setAttribute('aria-label', visivel ? 'Ocultar senha' : 'Mostrar senha');
+        }
+        definir(false);
+        botao.addEventListener('click', function () { definir(campo.type === 'password'); campo.focus(); });
+      });
+
+      function concluir(token, usuario, configurarMfa) {
+        if (usuario.tipo !== 'master') {
+          // Esta página é só do master: encerra a sessão aberta por engano.
+          fetch(API + '/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(function () {});
+          voltarDoMfa(true);
+          erro('Esta conta não tem acesso à administração da plataforma.');
+          return;
+        }
+        localStorage.setItem('onboarding_token', token);
+        localStorage.setItem('onboarding_usuario', JSON.stringify(usuario));
+        if (configurarMfa) { window.location.href = '/seguranca.html'; return; }
+        mostrarPainel(token, usuario);
+      }
+
+      var desafioMfa = null;
+      function voltarDoMfa(manterErro) {
+        desafioMfa = null;
+        el('formMfa').hidden = true;
+        el('formMaster').hidden = false;
+        el('mSenha').value = '';
+        if (!manterErro) erro('');
+      }
+      el('btnMfaVoltar').addEventListener('click', function () { voltarDoMfa(false); });
+
+      el('formMaster').addEventListener('submit', function (e) {
         e.preventDefault();
-        var aviso = document.getElementById('avisoLogin');
-        aviso.className = 'gc-aviso gc-erro';
-        aviso.textContent = '';
+        erro('');
+        var botao = el('btnEntrar');
+        botao.disabled = true;
         fetch(API + '/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: document.getElementById('mEmail').value.trim(), senha: document.getElementById('mSenha').value })
+          body: JSON.stringify({ email: el('mEmail').value.trim(), senha: el('mSenha').value })
         }).then(function (r) { return r.json().then(function (c) { return { ok: r.ok, c: c }; }); })
           .then(function (res) {
-            if (!res.ok) { aviso.textContent = res.c.erro || 'Não foi possível entrar.'; return; }
-            if (res.c.usuario.tipo !== 'master') {
-              // Esta página é só do master: encerra a sessão aberta por engano.
-              fetch(API + '/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + res.c.token } }).catch(function () {});
-              aviso.textContent = 'Esta conta não tem acesso à administração da plataforma.';
+            if (!res.ok) { erro(res.c.erro || 'Não foi possível entrar.'); return; }
+            if (res.c.mfaNecessario) {
+              desafioMfa = res.c.desafio;
+              el('formMaster').hidden = true;
+              el('formMfa').hidden = false;
+              el('mfaCodigo').value = '';
+              el('mfaCodigo').focus();
               return;
             }
-            localStorage.setItem('onboarding_token', res.c.token);
-            localStorage.setItem('onboarding_usuario', JSON.stringify(res.c.usuario));
-            mostrarPainel(res.c.token, res.c.usuario);
+            concluir(res.c.token, res.c.usuario, res.c.mfaConfiguracaoObrigatoria);
           })
-          .catch(function () { aviso.textContent = 'Não conseguimos falar com o servidor. Tente novamente.'; });
+          .catch(function () { erro('Não conseguimos falar com o servidor. Tente novamente.'); })
+          .then(function () { botao.disabled = false; });
+      });
+
+      el('formMfa').addEventListener('submit', function (e) {
+        e.preventDefault();
+        erro('');
+        fetch(API + '/auth/mfa/verificar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ desafio: desafioMfa, codigo: el('mfaCodigo').value.trim() })
+        }).then(function (r) { return r.json().then(function (c) { return { ok: r.ok, status: r.status, c: c }; }); })
+          .then(function (res) {
+            if (!res.ok) {
+              erro(res.c.erro || 'Código inválido.');
+              if (res.status === 429 || /expirou/i.test(res.c.erro || '')) voltarDoMfa(true);
+              return;
+            }
+            concluir(res.c.token, res.c.usuario, res.c.mfaConfiguracaoObrigatoria);
+          })
+          .catch(function () { erro('Não conseguimos falar com o servidor. Tente novamente.'); });
       });
     })();
   </script>
